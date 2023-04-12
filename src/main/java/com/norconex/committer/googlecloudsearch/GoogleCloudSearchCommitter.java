@@ -192,6 +192,13 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
 
     @Override
     protected void loadBatchCommitterFromXML(XML xml) {
+        configFilePath = xml.getString(CONFIG_KEY_CONFIG_FILE, null);
+        if(StringUtils.isBlank(configFilePath)) {
+            throw new RuntimeException(
+                    "Missing required plugin configuration entry: " + 
+            CONFIG_KEY_CONFIG_FILE);
+        }
+        
         String uploadFormatValue = xml.getString(CONFIG_KEY_UPLOAD_FORMAT,
                 UploadFormat.RAW.name());
         if (!StringUtils.isBlank(uploadFormatValue)) {

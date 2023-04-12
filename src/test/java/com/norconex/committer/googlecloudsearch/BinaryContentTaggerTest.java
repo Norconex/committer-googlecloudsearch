@@ -18,7 +18,6 @@ package com.norconex.committer.googlecloudsearch;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -38,7 +37,7 @@ import com.norconex.importer.handler.HandlerDoc;
 import com.norconex.importer.handler.ImporterHandlerException;
 import com.norconex.importer.parser.ParseState;
 
-class BinaryContentTaggerTests {
+class BinaryContentTaggerTest {
 
     private static final String URL = "http://x.yz/abc";
     private static final String CONTENT = "Test1234567890";
