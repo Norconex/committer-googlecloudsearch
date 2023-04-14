@@ -18,6 +18,23 @@ package com.norconex.committer.googlecloudsearch;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+import java.io.IOException;
+import java.lang.invoke.MethodHandles;
+import java.security.GeneralSecurityException;
+import java.util.Base64;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.google.api.client.http.AbstractInputStreamContent;
 import com.google.api.client.http.ByteArrayContent;
 import com.google.api.client.http.InputStreamContent;
@@ -45,26 +62,6 @@ import com.norconex.committer.core3.UpsertRequest;
 import com.norconex.committer.core3.batch.AbstractBatchCommitter;
 import com.norconex.commons.lang.map.Properties;
 import com.norconex.commons.lang.xml.XML;
-
-import java.io.IOException;
-import java.lang.invoke.MethodHandles;
-import java.security.GeneralSecurityException;
-import java.util.Base64;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import javax.xml.stream.XMLStreamException;
-import javax.xml.stream.XMLStreamWriter;
-
-import org.apache.commons.configuration2.XMLConfiguration;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 /**
  * --------------------- TODO: --------------------
@@ -137,7 +134,7 @@ import org.apache.logging.log4j.Logger;
  * </pre>
  */
 public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
-    private static final Logger LOG = LogManager
+    private static final Logger LOG = LoggerFactory
             .getLogger(MethodHandles.lookup().lookupClass());
 
     /** Path to the connector configuration file. Required. */
@@ -260,19 +257,17 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
 
     @Override
     protected void commitBatch(Iterator<ICommitterRequest> it)
-            throws CommitterException {
+            throws CommitterException {        
         init();
-//        LOG.info("Sending " + it.size()
-//                + " documents to Google Cloud Search for addition/deletion.");
         int docCount = 0;
         try {
             while (it.hasNext()) {
                 Stopwatch stopWatch = Stopwatch.createStarted();
 
                 ICommitterRequest r = it.next();
-                if (r instanceof UpsertRequest upsert) {
-                    String url = upsert.getReference();
-                    String contentType = upsert.getMetadata()
+                if (r instanceof UpsertRequest) {
+                    String url = r.getReference();
+                    String contentType = r.getMetadata()
                             .getString(FIELD_CONTENT_TYPE);
                     if (StringUtils.isBlank(contentType)) {
                         throw new CommitterException("Content type field ('"
@@ -281,12 +276,12 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
                     try {
                         AbstractInputStreamContent contentStream = 
                                 getInputStreamContent(
-                                        upsert, 
+                                        (UpsertRequest) r, 
                                         contentType);
                         addItem(url, 
                                 contentType, 
                                 contentStream,
-                                upsert.getMetadata(), 
+                                r.getMetadata(), 
                                 stopWatch);
                     } catch (CommitterException e) {
                         LOG.warn("Exception caught while committing: {}. {}", 
