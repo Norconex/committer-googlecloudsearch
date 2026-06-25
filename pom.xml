@@ -12,29 +12,31 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 -->
-<project xmlns="https://maven.apache.org/POM/4.0.0" xmlns:xsi="https://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.norconex.commons</groupId>
         <artifactId>norconex-commons-maven-parent</artifactId>
-        <version>1.0.0</version>
+        <version>1.2.0</version>
     </parent>
 
     <groupId>com.norconex.collectors</groupId>
     <artifactId>norconex-committer-google-cloudsearch</artifactId>
     <version>v3.0.0-SNAPSHOT</version>
     <name>Norconex Committer Google Cloudsearch</name>
-    <description></description>
+    <description>Google Cloud Search implementation of Norconex Committer.</description>
 
     <properties>
-        <java.version>1.8</java.version>
-        <maven.compiler.source>${java.version}</maven.compiler.source>
-        <maven.compiler.target>${java.version}</maven.compiler.target>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <site.baseurl />
-        <norconex-commons-lang.version>2.0.0</norconex-commons-lang.version>
+        <norconex-committer-core.version>3.0.0</norconex-committer-core.version>
+        <norconex-importer.version>3.1.0</norconex-importer.version>
+        <google-cloudsearch.version>v1-rev20260610-2.0.0</google-cloudsearch.version>
+        <google-auth.version>1.48.0</google-auth.version>
+        <wiremock.version>3.0.1</wiremock.version>
+        <google-http-client-test.version>1.47.0</google-http-client-test.version>
+        <google-http-client-jackson2.version>2.1.0</google-http-client-jackson2.version>
     </properties>
     <inceptionYear>2009</inceptionYear>
 
@@ -176,36 +178,30 @@
         </developer>
     </developers>
 
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>com.norconex.commons</groupId>
-                <artifactId>norconex-commons-lang</artifactId>
-                <version>${norconex-commons-lang.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.commons</groupId>
-                <artifactId>commons-lang3</artifactId>
-                <version>3.12.0</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.commons</groupId>
-                <artifactId>commons-collections4</artifactId>
-                <version>4.4</version>
-            </dependency>
-            <dependency>
-                <groupId>joda-time</groupId>
-                <artifactId>joda-time</artifactId>
-                <version>2.12.5</version>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
-
     <dependencies>
         <dependency>
-            <groupId>com.google.enterprise.cloudsearch</groupId>
-            <artifactId>google-cloudsearch-indexing-connector-sdk</artifactId>
-            <version>v1-0.0.3</version>
+            <groupId>com.norconex.commons</groupId>
+            <artifactId>norconex-commons-lang</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.norconex.collectors</groupId>
+            <artifactId>norconex-committer-core</artifactId>
+            <version>${norconex-committer-core.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.apis</groupId>
+            <artifactId>google-api-services-cloudsearch</artifactId>
+            <version>${google-cloudsearch.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.auth</groupId>
+            <artifactId>google-auth-library-oauth2-http</artifactId>
+            <version>${google-auth.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.http-client</groupId>
+            <artifactId>google-http-client-jackson2</artifactId>
+            <version>${google-http-client-jackson2.version}</version>
         </dependency>
         <dependency>
             <groupId>commons-io</groupId>
@@ -213,12 +209,8 @@
         </dependency>
         <dependency>
             <groupId>com.norconex.collectors</groupId>
-            <artifactId>norconex-committer-core</artifactId>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.norconex.collectors</groupId>
             <artifactId>norconex-importer</artifactId>
+            <version>${norconex-importer.version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>*</groupId>
@@ -226,6 +218,24 @@
                 </exclusion>
             </exclusions>
             <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.norconex.commons</groupId>
+            <artifactId>norconex-commons-lang</artifactId>
+            <classifier>resources</classifier>
+            <type>zip</type>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -245,30 +255,15 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>com.norconex.commons</groupId>
-            <artifactId>norconex-commons-lang</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>*</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-            </exclusions>
+            <groupId>com.google.http-client</groupId>
+            <artifactId>google-http-client-test</artifactId>
+            <version>${google-http-client-test.version}</version>
+            <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>com.norconex.commons</groupId>
-            <artifactId>norconex-commons-lang</artifactId>
-            <classifier>resources</classifier>
-            <type>zip</type>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.commons</groupId>
-            <artifactId>commons-configuration2</artifactId>
-            <version>2.9.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-slf4j-impl</artifactId>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock</artifactId>
+            <version>${wiremock.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

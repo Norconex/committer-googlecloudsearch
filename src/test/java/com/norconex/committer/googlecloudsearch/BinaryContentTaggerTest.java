@@ -18,10 +18,6 @@ package com.norconex.committer.googlecloudsearch;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -39,81 +35,85 @@ import com.norconex.importer.parser.ParseState;
 
 class BinaryContentTaggerTest {
 
-    private static final String URL = "http://x.yz/abc";
-    private static final String CONTENT = "Test1234567890";
-    private static final String CONTENT_BASE64 = "VGVzdDEyMzQ1Njc4OTA=";
-    private static final CachedStreamFactory csf = new CachedStreamFactory();
-    private static Properties metadata;
-    private HandlerDoc doc;    
-    private BinaryContentTagger subject;
+        private static final String URL = "http://x.yz/abc";
+        private static final String CONTENT = "Test1234567890";
+        private static final String CONTENT_BASE64 = "VGVzdDEyMzQ1Njc4OTA=";
+        private static final CachedStreamFactory csf = new CachedStreamFactory();
+        private static Properties metadata;
+        private HandlerDoc doc;
+        private BinaryContentTagger subject;
 
-    @BeforeEach
-    public void setUp() {
-        subject = new BinaryContentTagger();
-        metadata = new Properties();
-        doc = new HandlerDoc(new Doc(URL, csf.newInputStream(), metadata));
-    }
+        @BeforeEach
+        public void setUp() {
+                subject = new BinaryContentTagger();
+                metadata = new Properties();
+                doc = new HandlerDoc(new Doc(URL, csf.newInputStream(), metadata));
+        }
 
-    @Test
-    void tagDocumentShouldFailIfDocumentIsAlreadyParsed() {
-        ParseState parseState = mock(ParseState.class);
-        when(parseState.isPost()).thenReturn(true);
-        
-        String expectedErrMsg = "Document is already parsed. "
-                + "Please make sure the <tagger ... /> entry is inside the"
-                + " <preParseHandlers> list!";
-        
-        assertThatExceptionOfType(ImporterHandlerException.class)
-        .isThrownBy(() -> subject.tagDocument(
-                doc,
-                new ByteArrayInputStream(
-                        CONTENT.getBytes(StandardCharsets.UTF_8)),
-                parseState))
-        .withMessage(expectedErrMsg);
-    }
+        @Test
+        void tagDocumentShouldFailIfDocumentIsAlreadyParsed() {
+                ParseState parseState = ParseState.POST;
 
-    @Test
-    void tagDocumentShouldFailOnContentReadException() throws Exception {
-        ParseState parseState = mock(ParseState.class);
-        when(parseState.isPost()).thenReturn(false);
-        
-        InputStream contentStream = mock(InputStream.class);
-        when(contentStream.read(any())).thenThrow(
-                new IOException("Error when reading content stream!"));
+                String expectedErrMsg = "Document is already parsed. "
+                                + "Please make sure the <tagger ... /> entry is inside the"
+                                + " <preParseHandlers> list!";
 
-        assertThatExceptionOfType(ImporterHandlerException.class)
-        .isThrownBy(() -> subject.tagDocument(doc, contentStream, parseState))
-        .withMessage("java.io.IOException: Error when reading content stream!");
-    }
+                assertThatExceptionOfType(ImporterHandlerException.class)
+                                .isThrownBy(() -> subject.tagDocument(
+                                                doc,
+                                                new ByteArrayInputStream(
+                                                                CONTENT.getBytes(StandardCharsets.UTF_8)),
+                                                parseState))
+                                .withMessage(expectedErrMsg);
+        }
 
-    @Test
-    void tagDocumentSuccessful() throws Exception {
-        ParseState parseState = mock(ParseState.class);
-        when(parseState.isPost()).thenReturn(false);
-        
-        subject.tagDocument(
-                doc,
-                new ByteArrayInputStream(
-                        CONTENT.getBytes(StandardCharsets.UTF_8)),
-                parseState);
-        
-        assertThat(doc.getMetadata().getString(
-                        GoogleCloudSearchCommitter.FIELD_BINARY_CONTENT))
-        .isEqualTo(CONTENT_BASE64);
-    }
+        @Test
+        void tagDocumentShouldFailOnContentReadException() throws Exception {
+                ParseState parseState = ParseState.PRE;
 
-    @Test
-    void tagDocument_empty_successful() throws Exception {
-        ParseState parseState = mock(ParseState.class);
-        when(parseState.isPost()).thenReturn(false);
-        
-        subject.tagDocument(
-                doc, 
-                new ByteArrayInputStream(new byte[0]),
-                parseState);
-        
-        assertThat(doc.getMetadata().getString(
-                        GoogleCloudSearchCommitter.FIELD_BINARY_CONTENT))
-        .isEmpty();
-    }
+                        InputStream contentStream = new InputStream() {
+                                @Override
+                                public int read() throws IOException {
+                                        throw new IOException("Error when reading content stream!");
+                                }
+
+                                @Override
+                                public int read(byte[] b, int off, int len) throws IOException {
+                                        throw new IOException("Error when reading content stream!");
+                                }
+                        };
+
+                assertThatExceptionOfType(ImporterHandlerException.class)
+                                .isThrownBy(() -> subject.tagDocument(doc, contentStream, parseState))
+                                .withMessage("java.io.IOException: Error when reading content stream!");
+        }
+
+        @Test
+        void tagDocumentSuccessful() throws Exception {
+                ParseState parseState = ParseState.PRE;
+
+                subject.tagDocument(
+                                doc,
+                                new ByteArrayInputStream(
+                                                CONTENT.getBytes(StandardCharsets.UTF_8)),
+                                parseState);
+
+                assertThat(doc.getMetadata().getString(
+                                GoogleCloudSearchCommitter.FIELD_BINARY_CONTENT))
+                                .isEqualTo(CONTENT_BASE64);
+        }
+
+        @Test
+        void tagDocument_empty_successful() throws Exception {
+                ParseState parseState = ParseState.PRE;
+
+                subject.tagDocument(
+                                doc,
+                                new ByteArrayInputStream(new byte[0]),
+                                parseState);
+
+                assertThat(doc.getMetadata().getString(
+                                GoogleCloudSearchCommitter.FIELD_BINARY_CONTENT))
+                                .isEmpty();
+        }
 }

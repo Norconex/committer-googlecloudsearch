@@ -1,15 +1,58 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
-  <xs:include schemaLocation="/com/norconex/committer/core/AbstractMappedCommitter.xsd"></xs:include>
+  <xs:include schemaLocation="/com/norconex/committer/core3/batch/AbstractBatchCommitter.xsd"></xs:include>
   <xs:element name="committer">
     <xs:complexType>
       <xs:complexContent>
-        <xs:extension base="AbstractMappedCommitter">
+        <xs:extension base="AbstractBatchCommitter">
           <xs:all>
-            <xs:element name="configFilePath" type="nonEmptyString"
+            <xs:element name="secretKeyPath" type="nonEmptyString"
+              minOccurs="1" maxOccurs="1" />
+            <xs:element name="dataSourceId" type="nonEmptyString"
               minOccurs="1" maxOccurs="1" />
             <xs:element name="uploadFormat" type="uploadFormatValue"
               minOccurs="0" maxOccurs="1" />
+            <xs:element name="apiEndpoint" type="xs:string"
+              minOccurs="0" maxOccurs="1" />
+            <xs:element name="applicationName" type="xs:string"
+              minOccurs="0" maxOccurs="1" />
+            <xs:element name="connectorName" type="xs:string"
+              minOccurs="0" maxOccurs="1" />
+            <xs:element name="sourceIdField" type="xs:string"
+              minOccurs="0" maxOccurs="1" />
+            <xs:element name="keepSourceIdField" type="xs:boolean"
+              minOccurs="0" maxOccurs="1" />
+            <xs:element name="titleField" type="xs:string"
+              minOccurs="0" maxOccurs="1" />
+            <xs:element name="objectTypeField" type="xs:string"
+              minOccurs="0" maxOccurs="1" />
+            <xs:element name="updateTimeField" type="xs:string"
+              minOccurs="0" maxOccurs="1" />
+            <xs:element name="containerNameField" type="xs:string"
+              minOccurs="0" maxOccurs="1" />
+            <xs:element name="contentLanguageField" type="xs:string"
+              minOccurs="0" maxOccurs="1" />
+            <xs:element name="sourceRepositoryUrlField" type="xs:string"
+              minOccurs="0" maxOccurs="1" />
+            <xs:element name="acl" minOccurs="0" maxOccurs="1">
+              <xs:complexType>
+                <xs:sequence>
+                  <xs:element name="mapping" minOccurs="0" maxOccurs="unbounded">
+                    <xs:complexType>
+                      <xs:attribute name="fromField" type="xs:string" use="required" />
+                      <xs:attribute name="target" type="aclTargetValue" use="required" />
+                      <xs:attribute name="principalType" type="principalTypeValue" use="required" />
+                    </xs:complexType>
+                  </xs:element>
+                  <xs:element name="inherit" minOccurs="0" maxOccurs="1">
+                    <xs:complexType>
+                      <xs:attribute name="fromField" type="xs:string" use="required" />
+                      <xs:attribute name="aclInheritanceType" type="aclInheritanceValue" use="required" />
+                    </xs:complexType>
+                  </xs:element>
+                </xs:sequence>
+              </xs:complexType>
+            </xs:element>
           </xs:all>
         </xs:extension>
       </xs:complexContent>
@@ -24,6 +67,28 @@
     <xs:restriction base="xs:string">
       <xs:pattern value="[Tt][Ee][Xx][Tt]" />
       <xs:pattern value="[Rr][Aa][Ww]" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="aclTargetValue">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="readers" />
+      <xs:enumeration value="deniedReaders" />
+      <xs:enumeration value="owners" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="principalTypeValue">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="user" />
+      <xs:enumeration value="group" />
+      <xs:enumeration value="customer" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="aclInheritanceValue">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="NOT_APPLICABLE" />
+      <xs:enumeration value="CHILD_OVERRIDE" />
+      <xs:enumeration value="PARENT_OVERRIDE" />
+      <xs:enumeration value="BOTH_PERMIT" />
     </xs:restriction>
   </xs:simpleType>
 </xs:schema>
