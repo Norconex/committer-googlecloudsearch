@@ -41,7 +41,7 @@ import com.google.api.client.http.HttpTransport;
 import com.google.api.client.http.LowLevelHttpRequest;
 import com.google.api.client.http.LowLevelHttpResponse;
 import com.google.api.client.json.JsonFactory;
-import com.google.api.client.json.jackson2.JacksonFactory;
+import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.client.testing.http.MockHttpTransport;
 import com.google.api.client.testing.http.MockLowLevelHttpRequest;
 import com.google.api.client.testing.http.MockLowLevelHttpResponse;
@@ -54,7 +54,7 @@ import com.norconex.commons.lang.xml.XML;
 
 class GoogleCloudSearchCommitterTest {
 
-    private static final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
+        private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
     private static final String CONTENT = "test body";
     private static final String CONTENT_BASE64 = Base64.getEncoder().encodeToString(CONTENT.getBytes(UTF_8));
     private static final String REFERENCE = "https://example.com/path?q=1";
@@ -63,33 +63,37 @@ class GoogleCloudSearchCommitterTest {
     File tempDir;
 
     @Test
-    void loadFromXmlAndSaveToXmlSupportAclMappings() {
-        GoogleCloudSearchCommitter subject = new GoogleCloudSearchCommitter();
-        XML xml = new XML("committer");
-        xml.addElement("secretKeyPath", "/tmp/service-account.json");
-        xml.addElement("dataSourceId", "datasource-id");
-        XML aclXml = xml.addElement("acl");
-        aclXml.addElement("mapping")
-                .setAttribute("fromField", "acl.reader")
-                .setAttribute("target", "readers")
-                .setAttribute("principalType", "user");
-        aclXml.addElement("inherit")
-                .setAttribute("fromField", "parentReference")
-                .setAttribute("aclInheritanceType", "BOTH_PERMIT");
+    void loadFromXmlAndSaveToXmlSupportAclMappings() throws Exception {
+        try (GoogleCloudSearchCommitter subject = new GoogleCloudSearchCommitter()) {
+            XML xml = new XML("committer");
+            xml.addElement("secretKeyPath", "/tmp/service-account.json");
+            xml.addElement("dataSourceId", "datasource-id");
+            XML aclXml = xml.addElement("acl");
+            aclXml.addElement("mapping")
+                    .setAttribute("fromField", "acl.reader")
+                    .setAttribute("target", "readers")
+                    .setAttribute("principalType", "user");
+            aclXml.addElement("inherit")
+                    .setAttribute("fromField", "parentReference")
+                    .setAttribute("aclInheritanceType", "BOTH_PERMIT");
 
-        subject.loadBatchCommitterFromXML(xml);
+            subject.loadBatchCommitterFromXML(xml);
 
-        XML saved = new XML("committer");
-        subject.saveBatchCommitterToXML(saved);
+            XML saved = new XML("committer");
+            subject.saveBatchCommitterToXML(saved);
 
-        assertThat(saved.getString("secretKeyPath", null))
-                .isEqualTo("/tmp/service-account.json");
-        assertThat(saved.getString("dataSourceId", null))
-                .isEqualTo("datasource-id");
-        assertThat(saved.getXMLList("acl/mapping")).hasSize(1);
-        assertThat(saved.getXML("acl/inherit")
-                .getString("@aclInheritanceType", null))
-                .isEqualTo("BOTH_PERMIT");
+            assertThat(saved.getString("secretKeyPath", null))
+                    .isEqualTo("/tmp/service-account.json");
+            assertThat(saved.getString("dataSourceId", null))
+                    .isEqualTo("datasource-id");
+            assertThat(saved.getXMLList("acl/mapping")).hasSize(1);
+            assertThat(saved.getXML("acl/mapping")
+                    .getString("@principalType", null))
+                    .isEqualTo("user");
+            assertThat(saved.getXML("acl/inherit")
+                    .getString("@aclInheritanceType", null))
+                    .isEqualTo("BOTH_PERMIT");
+        }
     }
 
     @Test
@@ -99,41 +103,42 @@ class GoogleCloudSearchCommitterTest {
         transport.enqueue(jsonResponse(successfulBatchResponseHeader(),
                 successfulBatchResponseBody("operations/index-1")));
 
-        GoogleCloudSearchCommitter subject = new GoogleCloudSearchCommitter(
-                new TestHelper(transport, 1000L));
-        XML xml = minimalXml(
-                new File(tempDir, "placeholder.json").getAbsolutePath(),
-                "https://mock.local/");
-        xml.addElement("uploadFormat", "text");
-        XML aclXml = xml.addElement("acl");
-        aclXml.addElement("mapping")
-                .setAttribute("fromField", "acl.reader")
-                .setAttribute("target", "readers")
-                .setAttribute("principalType", "user");
-        subject.loadBatchCommitterFromXML(xml);
-        subject.initBatchCommitter();
+        try (GoogleCloudSearchCommitter subject = new GoogleCloudSearchCommitter(
+                new TestHelper(transport, 1000L))) {
+            XML xml = minimalXml(
+                    new File(tempDir, "placeholder.json").getAbsolutePath(),
+                    "https://mock.local/");
+            xml.addElement("uploadFormat", "text");
+            XML aclXml = xml.addElement("acl");
+            aclXml.addElement("mapping")
+                    .setAttribute("fromField", "acl.reader")
+                    .setAttribute("target", "readers")
+                    .setAttribute("principalType", "user");
+            subject.loadBatchCommitterFromXML(xml);
+            subject.initBatchCommitter();
 
-        Properties metadata = new Properties();
-        metadata.set("title", "Example title");
-        metadata.set("objectType", "webpage");
-        metadata.set("acl.reader", "reader@example.com");
-        metadata.set(GoogleCloudSearchCommitter.FIELD_CONTENT_TYPE, "text/plain");
+            Properties metadata = new Properties();
+            metadata.set("title", "Example title");
+            metadata.set("objectType", "webpage");
+            metadata.set("acl.reader", "reader@example.com");
+            metadata.set(GoogleCloudSearchCommitter.FIELD_CONTENT_TYPE, "text/plain");
 
-        List<ICommitterRequest> requests = new ArrayList<>();
-        requests.add(new UpsertRequest(
-                REFERENCE,
-                metadata,
-                new ByteArrayInputStream(CONTENT.getBytes(UTF_8))));
-        requests.add(new DeleteRequest(REFERENCE + "/delete", new Properties()));
+            List<ICommitterRequest> requests = new ArrayList<>();
+            requests.add(new UpsertRequest(
+                    REFERENCE,
+                    metadata,
+                    new ByteArrayInputStream(CONTENT.getBytes(UTF_8))));
+            requests.add(new DeleteRequest(REFERENCE + "/delete", new Properties()));
 
-        subject.commitBatch(requests.iterator());
+            subject.commitBatch(requests.iterator());
 
-        assertThat(transport.getUrls()).contains("https://mock.local/batch");
-        String batchBody = transport.getRequests().get(0).getContentAsString();
-        assertThat(batchBody).contains(":index");
-        assertThat(batchBody).contains("DELETE");
-        assertThat(batchBody).contains("Example title");
-        assertThat(batchBody).contains("reader@example.com");
+            assertThat(transport.getUrls()).contains("https://mock.local/batch");
+            String batchBody = transport.getRequests().get(0).getContentAsString();
+            assertThat(batchBody).contains(":index");
+            assertThat(batchBody).contains("DELETE");
+            assertThat(batchBody).contains("Example title");
+            assertThat(batchBody).contains("reader@example.com");
+        }
     }
 
     @Test
@@ -171,25 +176,26 @@ class GoogleCloudSearchCommitterTest {
 
             File secretFile = createServiceAccountJson(server.baseUrl());
 
-            GoogleCloudSearchCommitter subject = new GoogleCloudSearchCommitter();
-            XML xml = minimalXml(secretFile.getAbsolutePath(), server.baseUrl() + "/");
-            subject.loadBatchCommitterFromXML(xml);
-            subject.initBatchCommitter();
+            try (GoogleCloudSearchCommitter subject = new GoogleCloudSearchCommitter()) {
+                XML xml = minimalXml(secretFile.getAbsolutePath(), server.baseUrl() + "/");
+                subject.loadBatchCommitterFromXML(xml);
+                subject.initBatchCommitter();
 
-            Properties metadata = new Properties();
-            metadata.set(GoogleCloudSearchCommitter.FIELD_BINARY_CONTENT,
-                    CONTENT_BASE64);
-            metadata.set(GoogleCloudSearchCommitter.FIELD_CONTENT_TYPE,
-                    "text/plain");
-            metadata.set("title", "Raw title");
+                Properties metadata = new Properties();
+                metadata.set(GoogleCloudSearchCommitter.FIELD_BINARY_CONTENT,
+                        CONTENT_BASE64);
+                metadata.set(GoogleCloudSearchCommitter.FIELD_CONTENT_TYPE,
+                        "text/plain");
+                metadata.set("title", "Raw title");
 
-            List<ICommitterRequest> requests = new ArrayList<>();
-            requests.add(new UpsertRequest(
-                    REFERENCE,
-                    metadata,
-                    new ByteArrayInputStream("ignored".getBytes(UTF_8))));
+                List<ICommitterRequest> requests = new ArrayList<>();
+                requests.add(new UpsertRequest(
+                        REFERENCE,
+                        metadata,
+                        new ByteArrayInputStream("ignored".getBytes(UTF_8))));
 
-            subject.commitBatch(requests.iterator());
+                subject.commitBatch(requests.iterator());
+            }
 
             server.verify(1, com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor(
                     com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo(
@@ -207,11 +213,11 @@ class GoogleCloudSearchCommitterTest {
         }
     }
 
-        private XML minimalXml(String secretKeyPath, String apiEndpoint) {
+    private XML minimalXml(String secretKeyPath, String apiEndpoint) {
         XML xml = new XML("committer");
-                xml.addElement("secretKeyPath", secretKeyPath);
+        xml.addElement("secretKeyPath", secretKeyPath);
         xml.addElement("dataSourceId", "datasource-id");
-                xml.addElement("apiEndpoint", apiEndpoint);
+        xml.addElement("apiEndpoint", apiEndpoint);
         return xml;
     }
 

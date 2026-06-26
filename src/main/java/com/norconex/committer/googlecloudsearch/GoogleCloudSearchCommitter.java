@@ -55,7 +55,7 @@ import com.google.api.client.http.HttpHeaders;
 import com.google.api.client.http.HttpRequestInitializer;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.json.JsonFactory;
-import com.google.api.client.json.jackson2.JacksonFactory;
+import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.cloudsearch.v1.CloudSearch;
 import com.google.api.services.cloudsearch.v1.model.GSuitePrincipal;
 import com.google.api.services.cloudsearch.v1.model.IndexItemRequest;
@@ -189,9 +189,29 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     }
 
     enum PrincipalType {
-        USER,
-        GROUP,
-        CUSTOMER
+        USER("user"),
+        GROUP("group"),
+        CUSTOMER("customer");
+
+        private final String xmlValue;
+
+        PrincipalType(String xmlValue) {
+            this.xmlValue = xmlValue;
+        }
+
+        static PrincipalType fromXmlValue(String value) {
+            for (PrincipalType principalType : values()) {
+                if (principalType.xmlValue.equalsIgnoreCase(value)) {
+                    return principalType;
+                }
+            }
+            throw new IllegalArgumentException(
+                    "Unsupported ACL principalType: " + value);
+        }
+
+        String getXmlValue() {
+            return xmlValue;
+        }
     }
 
     enum AclInheritanceType {
@@ -648,10 +668,10 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
             aclMappings.add(new AclMapping(
                     mappingXml.getString("@fromField", null),
                     AclTarget.fromXmlValue(mappingXml.getString("@target", null)),
-                    PrincipalType.valueOf(mappingXml.getString(
-                            "@principalType", PrincipalType.USER.name())
-                            .toUpperCase())));
+                PrincipalType.fromXmlValue(mappingXml.getString(
+                    "@principalType", PrincipalType.USER.getXmlValue()))));
         }
+        aclInheritance = new AclInheritanceMapping();
         xml.ifXML("acl/inherit", x -> aclInheritance = new AclInheritanceMapping(
                 x.getString("@fromField", null),
                 AclInheritanceType.valueOf(x.getString(
@@ -683,7 +703,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
                 aclXml.addElement("mapping")
                         .setAttribute("fromField", aclMapping.getFromField())
                         .setAttribute("target", aclMapping.getTarget().getXmlValue())
-                        .setAttribute("principalType", aclMapping.getPrincipalType());
+                        .setAttribute("principalType", aclMapping.getPrincipalType().getXmlValue());
             }
             if (StringUtils.isNotBlank(aclInheritance.getFromField())) {
                 aclXml.addElement("inherit")
@@ -712,7 +732,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         }
 
         JsonFactory createJsonFactory() {
-            return JacksonFactory.getDefaultInstance();
+            return GsonFactory.getDefaultInstance();
         }
 
         HttpRequestInitializer createRequestInitializer(String secretKeyPath)
@@ -739,7 +759,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         }
 
         private String ensureTrailingSlash(String value) {
-            return StringUtils.endsWith(value, "/") ? value : value + "/";
+            return value.endsWith("/") ? value : value + "/";
         }
     }
 

@@ -12,41 +12,61 @@
               minOccurs="1" maxOccurs="1" />
             <xs:element name="uploadFormat" type="uploadFormatValue"
               minOccurs="0" maxOccurs="1" />
-            <xs:element name="apiEndpoint" type="xs:string"
+            <xs:element name="apiEndpoint" type="nonEmptyString"
               minOccurs="0" maxOccurs="1" />
-            <xs:element name="applicationName" type="xs:string"
+            <xs:element name="applicationName" type="nonEmptyString"
               minOccurs="0" maxOccurs="1" />
-            <xs:element name="connectorName" type="xs:string"
+            <xs:element name="connectorName" type="nonEmptyString"
               minOccurs="0" maxOccurs="1" />
-            <xs:element name="sourceIdField" type="xs:string"
+            <xs:element name="sourceIdField" type="nonEmptyString"
               minOccurs="0" maxOccurs="1" />
             <xs:element name="keepSourceIdField" type="xs:boolean"
               minOccurs="0" maxOccurs="1" />
-            <xs:element name="titleField" type="xs:string"
+            <xs:element name="titleField" type="nonEmptyString"
               minOccurs="0" maxOccurs="1" />
-            <xs:element name="objectTypeField" type="xs:string"
+            <xs:element name="objectTypeField" type="nonEmptyString"
               minOccurs="0" maxOccurs="1" />
-            <xs:element name="updateTimeField" type="xs:string"
+            <xs:element name="updateTimeField" type="nonEmptyString"
               minOccurs="0" maxOccurs="1" />
-            <xs:element name="containerNameField" type="xs:string"
+            <xs:element name="containerNameField" type="nonEmptyString"
               minOccurs="0" maxOccurs="1" />
-            <xs:element name="contentLanguageField" type="xs:string"
+            <xs:element name="contentLanguageField" type="nonEmptyString"
               minOccurs="0" maxOccurs="1" />
-            <xs:element name="sourceRepositoryUrlField" type="xs:string"
+            <xs:element name="sourceRepositoryUrlField" type="nonEmptyString"
               minOccurs="0" maxOccurs="1" />
             <xs:element name="acl" minOccurs="0" maxOccurs="1">
+              <xs:annotation>
+                <xs:documentation>
+                  Optional ACL mapping section. Use one or more mapping elements
+                  to convert metadata fields into Google Cloud Search principals,
+                  and optionally use inherit to set ACL inheritance from a
+                  parent item reference.
+                </xs:documentation>
+              </xs:annotation>
               <xs:complexType>
                 <xs:sequence>
                   <xs:element name="mapping" minOccurs="0" maxOccurs="unbounded">
+                    <xs:annotation>
+                      <xs:documentation>
+                        Maps a metadata field to one Google ACL target using the
+                        chosen principal type.
+                      </xs:documentation>
+                    </xs:annotation>
                     <xs:complexType>
-                      <xs:attribute name="fromField" type="xs:string" use="required" />
+                      <xs:attribute name="fromField" type="nonEmptyString" use="required" />
                       <xs:attribute name="target" type="aclTargetValue" use="required" />
                       <xs:attribute name="principalType" type="principalTypeValue" use="required" />
                     </xs:complexType>
                   </xs:element>
                   <xs:element name="inherit" minOccurs="0" maxOccurs="1">
+                    <xs:annotation>
+                      <xs:documentation>
+                        Declares which metadata field contains the parent item
+                        ID to use for Google ACL inheritance.
+                      </xs:documentation>
+                    </xs:annotation>
                     <xs:complexType>
-                      <xs:attribute name="fromField" type="xs:string" use="required" />
+                      <xs:attribute name="fromField" type="nonEmptyString" use="required" />
                       <xs:attribute name="aclInheritanceType" type="aclInheritanceValue" use="required" />
                     </xs:complexType>
                   </xs:element>

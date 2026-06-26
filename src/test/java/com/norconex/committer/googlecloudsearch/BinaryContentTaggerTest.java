@@ -18,6 +18,7 @@ package com.norconex.committer.googlecloudsearch;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -71,17 +72,17 @@ class BinaryContentTaggerTest {
         void tagDocumentShouldFailOnContentReadException() throws Exception {
                 ParseState parseState = ParseState.PRE;
 
-                        InputStream contentStream = new InputStream() {
-                                @Override
-                                public int read() throws IOException {
-                                        throw new IOException("Error when reading content stream!");
-                                }
+                InputStream contentStream = new InputStream() {
+                        @Override
+                        public int read() throws IOException {
+                                throw new IOException("Error when reading content stream!");
+                        }
 
-                                @Override
-                                public int read(byte[] b, int off, int len) throws IOException {
-                                        throw new IOException("Error when reading content stream!");
-                                }
-                        };
+                        @Override
+                        public int read(byte[] b, int off, int len) throws IOException {
+                                throw new IOException("Error when reading content stream!");
+                        }
+                };
 
                 assertThatExceptionOfType(ImporterHandlerException.class)
                                 .isThrownBy(() -> subject.tagDocument(doc, contentStream, parseState))
