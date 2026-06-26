@@ -668,8 +668,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
             aclMappings.add(new AclMapping(
                     mappingXml.getString("@fromField", null),
                     AclTarget.fromXmlValue(mappingXml.getString("@target", null)),
-                PrincipalType.fromXmlValue(mappingXml.getString(
-                    "@principalType", PrincipalType.USER.getXmlValue()))));
+                    PrincipalType.fromXmlValue(mappingXml.getString(
+                            "@principalType", PrincipalType.USER.getXmlValue()))));
         }
         aclInheritance = new AclInheritanceMapping();
         xml.ifXML("acl/inherit", x -> aclInheritance = new AclInheritanceMapping(

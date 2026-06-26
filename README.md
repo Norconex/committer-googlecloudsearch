@@ -11,10 +11,10 @@ mock endpoint for development and tests.
 
 - Upserts Norconex documents into Google Cloud Search.
 - Deletes Google Cloud Search items using the Norconex document reference or a
-	mapped source ID.
+  mapped source ID.
 - Supports `raw` and `text` upload modes.
 - Maps Norconex metadata to Google `ItemMetadata`, `ItemStructuredData`, and
-	optional ACLs.
+  optional ACLs.
 - Supports local integration testing with WireMock through `apiEndpoint`.
 
 ## Requirements
@@ -81,22 +81,22 @@ committer.
 
 ### Option Reference
 
-| Element | Required | Default | Description |
-| --- | --- | --- | --- |
-| `secretKeyPath` | Yes | None | Absolute or relative path to the Google service account JSON key file used to authenticate indexing requests. |
-| `dataSourceId` | Yes | None | Google Cloud Search data source ID. Item names are built as `datasources/{dataSourceId}/items/{itemId}`. |
-| `uploadFormat` | No | `raw` | Controls how content is sent to Google Cloud Search. Use `raw` to index binary/original content, or `text` to index the committer request text content. |
-| `apiEndpoint` | No | Google production endpoint | Overrides the Google Cloud Search root URL. Use this for local WireMock or other mock endpoints. A trailing slash is optional. |
-| `applicationName` | No | `Norconex Google Cloud Search Committer` | Value passed to the Google client as the application name. Useful for logs, monitoring, and distinguishing this connector in HTTP client metadata. |
-| `connectorName` | No | Same as `applicationName` | Value sent in Google indexing requests as `connectorName`. Set this when your Cloud Search connector identity must differ from the application name. |
-| `sourceIdField` | No | Document reference | Metadata field to use as the source item ID instead of the Norconex request reference. The chosen value is encoded into a safe Google item ID. |
-| `keepSourceIdField` | No | `false` | Whether the metadata field referenced by `sourceIdField` should remain in document metadata after it has been used as the item ID source. |
-| `titleField` | No | `title` | Metadata field mapped to Google `ItemMetadata.title`. |
-| `objectTypeField` | No | `objectType` | Metadata field mapped to Google `ItemMetadata.objectType`. If the field is absent or blank, the committer uses `document`. |
-| `updateTimeField` | No | `Last-Modified` | Metadata field mapped to Google `ItemMetadata.updateTime`. Supported formats include ISO-8601 instants and offsets, RFC-1123 dates, and local date-times interpreted as UTC. Unparseable values are ignored. |
-| `containerNameField` | No | None | Metadata field mapped to Google `ItemMetadata.containerName`. Useful for parent labels or logical folder/container names. |
-| `contentLanguageField` | No | None | Metadata field mapped to Google `ItemMetadata.contentLanguage`. |
-| `sourceRepositoryUrlField` | No | Norconex document reference | Metadata field mapped to Google `ItemMetadata.sourceRepositoryUrl`. If omitted, the committer uses the Norconex request reference. |
+| Element                    | Required | Default                                  | Description                                                                                                                                                                                                  |
+| -------------------------- | -------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `secretKeyPath`            | Yes      | None                                     | Absolute or relative path to the Google service account JSON key file used to authenticate indexing requests.                                                                                                |
+| `dataSourceId`             | Yes      | None                                     | Google Cloud Search data source ID. Item names are built as `datasources/{dataSourceId}/items/{itemId}`.                                                                                                     |
+| `uploadFormat`             | No       | `raw`                                    | Controls how content is sent to Google Cloud Search. Use `raw` to index binary/original content, or `text` to index the committer request text content.                                                      |
+| `apiEndpoint`              | No       | Google production endpoint               | Overrides the Google Cloud Search root URL. Use this for local WireMock or other mock endpoints. A trailing slash is optional.                                                                               |
+| `applicationName`          | No       | `Norconex Google Cloud Search Committer` | Value passed to the Google client as the application name. Useful for logs, monitoring, and distinguishing this connector in HTTP client metadata.                                                           |
+| `connectorName`            | No       | Same as `applicationName`                | Value sent in Google indexing requests as `connectorName`. Set this when your Cloud Search connector identity must differ from the application name.                                                         |
+| `sourceIdField`            | No       | Document reference                       | Metadata field to use as the source item ID instead of the Norconex request reference. The chosen value is encoded into a safe Google item ID.                                                               |
+| `keepSourceIdField`        | No       | `false`                                  | Whether the metadata field referenced by `sourceIdField` should remain in document metadata after it has been used as the item ID source.                                                                    |
+| `titleField`               | No       | `title`                                  | Metadata field mapped to Google `ItemMetadata.title`.                                                                                                                                                        |
+| `objectTypeField`          | No       | `objectType`                             | Metadata field mapped to Google `ItemMetadata.objectType`. If the field is absent or blank, the committer uses `document`.                                                                                   |
+| `updateTimeField`          | No       | `Last-Modified`                          | Metadata field mapped to Google `ItemMetadata.updateTime`. Supported formats include ISO-8601 instants and offsets, RFC-1123 dates, and local date-times interpreted as UTC. Unparseable values are ignored. |
+| `containerNameField`       | No       | None                                     | Metadata field mapped to Google `ItemMetadata.containerName`. Useful for parent labels or logical folder/container names.                                                                                    |
+| `contentLanguageField`     | No       | None                                     | Metadata field mapped to Google `ItemMetadata.contentLanguage`.                                                                                                                                              |
+| `sourceRepositoryUrlField` | No       | Norconex document reference              | Metadata field mapped to Google `ItemMetadata.sourceRepositoryUrl`. If omitted, the committer uses the Norconex request reference.                                                                           |
 
 ## ACL Configuration
 
@@ -107,27 +107,27 @@ Search ACL fields.
 
 `mapping` attributes:
 
-| Attribute | Required | Values | Description |
-| --- | --- | --- | --- |
-| `fromField` | Yes | Any metadata field name | Metadata field whose values will be converted to Google principals. |
-| `target` | Yes | `readers`, `deniedReaders`, `owners` | Google ACL target list to populate. |
-| `principalType` | Yes | `user`, `group`, `customer` | Principal conversion mode. `user` maps values to Google Workspace user emails, `group` maps values to Google Workspace group emails, and `customer` grants the entire Google Workspace customer domain. |
+| Attribute       | Required | Values                               | Description                                                                                                                                                                                             |
+| --------------- | -------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fromField`     | Yes      | Any metadata field name              | Metadata field whose values will be converted to Google principals.                                                                                                                                     |
+| `target`        | Yes      | `readers`, `deniedReaders`, `owners` | Google ACL target list to populate.                                                                                                                                                                     |
+| `principalType` | Yes      | `user`, `group`, `customer`          | Principal conversion mode. `user` maps values to Google Workspace user emails, `group` maps values to Google Workspace group emails, and `customer` grants the entire Google Workspace customer domain. |
 
 ### ACL Inheritance Element
 
 `inherit` attributes:
 
-| Attribute | Required | Values | Description |
-| --- | --- | --- | --- |
-| `fromField` | Yes | Any metadata field name | Metadata field containing the parent item identifier. The value is converted into the same encoded item ID format used for normal documents. |
-| `aclInheritanceType` | Yes | `NOT_APPLICABLE`, `CHILD_OVERRIDE`, `PARENT_OVERRIDE`, `BOTH_PERMIT` | Google Cloud Search ACL inheritance behavior for the `inheritAclFrom` relationship. |
+| Attribute            | Required | Values                                                               | Description                                                                                                                                  |
+| -------------------- | -------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fromField`          | Yes      | Any metadata field name                                              | Metadata field containing the parent item identifier. The value is converted into the same encoded item ID format used for normal documents. |
+| `aclInheritanceType` | Yes      | `NOT_APPLICABLE`, `CHILD_OVERRIDE`, `PARENT_OVERRIDE`, `BOTH_PERMIT` | Google Cloud Search ACL inheritance behavior for the `inheritAclFrom` relationship.                                                          |
 
 ### ACL Notes
 
 - ACL fields used by `mapping` and `inherit` are excluded from structured data.
 - Blank ACL values are ignored.
 - If no ACL mapping produces any principals and no inheritance is configured,
-	no ACL block is sent for the item.
+  no ACL block is sent for the item.
 
 ## Content Upload Behavior
 
@@ -135,9 +135,9 @@ Search ACL fields.
 
 - Intended for original/binary content.
 - Reads the `binaryContent` metadata field populated by
-	`BinaryContentTagger`.
+  `BinaryContentTagger`.
 - If `binaryContent` is missing, the committer falls back to the request
-	content stream and logs a warning.
+  content stream and logs a warning.
 - Uses Google upload-session plus media-upload endpoints.
 
 When using `raw`, add `BinaryContentTagger` in a pre-parse handler chain:
@@ -177,7 +177,7 @@ stub these endpoints:
 
 - OAuth token exchange: `/oauth2/v4/token`
 - Upload session creation:
-	`/v1/indexing/datasources/{dataSourceId}/items/{itemId}:upload`
+  `/v1/indexing/datasources/{dataSourceId}/items/{itemId}:upload`
 - Media upload: `/upload/v1/media/{uploadItemRef}`
 - Batch indexing and delete execution: `/batch`
 
@@ -195,6 +195,6 @@ mvn --% -Dgpg.skip=true -DskipITs clean test
 ## Notes
 
 - Item IDs are URL-safe Base64 encoded from the chosen source ID. Very large
-	IDs are reduced to a SHA-256 form to stay within Cloud Search limits.
+  IDs are reduced to a SHA-256 form to stay within Cloud Search limits.
 - Deletes use the same ID derivation logic as upserts, so `sourceIdField`
-	should remain stable across crawl runs.
+  should remain stable across crawl runs.
