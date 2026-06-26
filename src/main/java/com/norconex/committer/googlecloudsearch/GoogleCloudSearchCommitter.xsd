@@ -78,11 +78,6 @@
       </xs:complexContent>
     </xs:complexType>
   </xs:element>
-  <xs:simpleType name="nonEmptyString">
-    <xs:restriction base="xs:string">
-      <xs:minLength value="1" />
-    </xs:restriction>
-  </xs:simpleType>
   <xs:simpleType name="uploadFormatValue">
     <xs:restriction base="xs:string">
       <xs:pattern value="[Tt][Ee][Xx][Tt]" />
