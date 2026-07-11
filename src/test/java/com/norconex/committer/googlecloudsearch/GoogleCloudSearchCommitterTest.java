@@ -138,6 +138,19 @@ class GoogleCloudSearchCommitterTest {
                         assertThat(batchBody).contains("DELETE");
                         assertThat(batchBody).contains("Example title");
                         assertThat(batchBody).contains("reader@example.com");
+
+                        // Item.version is a base64-encoded bytes field on the wire.
+                        // Regression test for a bug where the raw, unencoded version
+                        // string was sent as-is, which the real Cloud Search API
+                        // rejected with "Base64 decoding failed".
+                        java.util.regex.Matcher versionMatcher = java.util.regex.Pattern
+                                        .compile("\"version\":\"([^\"]+)\"")
+                                        .matcher(batchBody);
+                        assertThat(versionMatcher.find()).isTrue();
+                        String decodedVersion = new String(
+                                        Base64.getUrlDecoder().decode(versionMatcher.group(1)),
+                                        UTF_8);
+                        assertThat(decodedVersion).matches("\\d{19}-\\d{6}");
                 }
         }
 
@@ -160,12 +173,15 @@ class GoogleCloudSearchCommitterTest {
                                         .willReturn(com.github.tomakehurst.wiremock.client.WireMock.aResponse()
                                                         .withHeader("Content-Type", "application/json")
                                                         .withBody("{\"name\":\"uploadItems/test-upload\"}")));
+                        // The real media.upload endpoint returns an empty body on
+                        // success (unlike the Media-typed response the generated
+                        // client stub declares). Mimicking that here catches
+                        // regressions where the response gets parsed as JSON.
                         server.stubFor(com.github.tomakehurst.wiremock.client.WireMock.post(
                                         com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching(
                                                         "/upload/v1/media/.*"))
                                         .willReturn(com.github.tomakehurst.wiremock.client.WireMock.aResponse()
-                                                        .withHeader("Content-Type", "application/json")
-                                                        .withBody("{\"resourceName\":\"uploadItems/test-upload\"}")));
+                                                        .withStatus(200)));
                         server.stubFor(com.github.tomakehurst.wiremock.client.WireMock.post(
                                         com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo("/batch"))
                                         .willReturn(com.github.tomakehurst.wiremock.client.WireMock.aResponse()
