@@ -108,6 +108,7 @@ import com.norconex.commons.lang.xml.XML;
  * <secretKeyPath>/path/to/google-service-account.json</secretKeyPath>
  * <dataSourceId>your-datasource-id</dataSourceId>
  * <uploadFormat>raw</uploadFormat>
+ * <requestMode>asynchronous</requestMode>
  * <apiEndpoint>http://localhost:8080/</apiEndpoint>
  *
  * <acl>
@@ -132,6 +133,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     static final String CONFIG_SECRET_KEY_PATH = "secretKeyPath";
     static final String CONFIG_DATA_SOURCE_ID = "dataSourceId";
     static final String CONFIG_UPLOAD_FORMAT = "uploadFormat";
+    static final String CONFIG_REQUEST_MODE = "requestMode";
     static final String CONFIG_API_ENDPOINT = "apiEndpoint";
     static final String CONFIG_APPLICATION_NAME = "applicationName";
     static final String CONFIG_CONNECTOR_NAME = "connectorName";
@@ -161,6 +163,11 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     enum UploadFormat {
         RAW,
         TEXT
+    }
+
+    enum RequestMode {
+        SYNCHRONOUS,
+        ASYNCHRONOUS
     }
 
     enum AclTarget {
@@ -239,6 +246,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     private String contentLanguageField;
     private String sourceRepositoryUrlField;
     private UploadFormat uploadFormat = UploadFormat.RAW;
+    private RequestMode requestMode = RequestMode.ASYNCHRONOUS;
     private AclInheritanceMapping aclInheritance = new AclInheritanceMapping();
 
     private CloudSearch cloudSearch;
@@ -323,7 +331,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
 
         IndexItemRequest indexRequest = new IndexItemRequest()
                 .setConnectorName(connectorName)
-                .setItem(item);
+                .setItem(item)
+                .setMode(requestMode.name());
 
         cloudSearch.indexing()
                 .datasources()
@@ -341,6 +350,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
                 .datasources()
                 .items()
                 .delete(itemName)
+                .setMode(requestMode.name())
                 .queue(batch, failures);
     }
 
@@ -667,6 +677,10 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
                 CONFIG_UPLOAD_FORMAT, uploadFormat.name());
         uploadFormat = UploadFormat.valueOf(uploadFormatValue.toUpperCase());
 
+        String requestModeValue = xml.getString(
+                CONFIG_REQUEST_MODE, requestMode.name());
+        requestMode = RequestMode.valueOf(requestModeValue.toUpperCase());
+
         aclMappings.clear();
         for (XML mappingXml : xml.getXMLList("acl/mapping")) {
             aclMappings.add(new AclMapping(
@@ -688,6 +702,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         xml.addElement(CONFIG_SECRET_KEY_PATH, secretKeyPath);
         xml.addElement(CONFIG_DATA_SOURCE_ID, dataSourceId);
         xml.addElement(CONFIG_UPLOAD_FORMAT, uploadFormat.name().toLowerCase());
+        xml.addElement(CONFIG_REQUEST_MODE, requestMode.name().toLowerCase());
         xml.addElement(CONFIG_API_ENDPOINT, apiEndpoint);
         xml.addElement(CONFIG_APPLICATION_NAME, applicationName);
         xml.addElement(CONFIG_CONNECTOR_NAME, connectorName);
