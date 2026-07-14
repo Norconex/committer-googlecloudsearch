@@ -254,6 +254,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     public String getSecretKeyPath() {
         return secretKeyPath;
     }
+
     public GoogleCloudSearchCommitter setSecretKeyPath(String secretKeyPath) {
         this.secretKeyPath = secretKeyPath;
         return this;
@@ -262,6 +263,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     public String getDataSourceId() {
         return dataSourceId;
     }
+
     public GoogleCloudSearchCommitter setDataSourceId(String dataSourceId) {
         this.dataSourceId = dataSourceId;
         return this;
@@ -270,6 +272,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     public String getApiEndpoint() {
         return apiEndpoint;
     }
+
     public GoogleCloudSearchCommitter setApiEndpoint(String apiEndpoint) {
         this.apiEndpoint = apiEndpoint;
         return this;
@@ -278,6 +281,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     public String getApplicationName() {
         return applicationName;
     }
+
     public GoogleCloudSearchCommitter setApplicationName(String applicationName) {
         this.applicationName = applicationName;
         return this;
@@ -286,6 +290,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     public String getConnectorName() {
         return connectorName;
     }
+
     public GoogleCloudSearchCommitter setConnectorName(String connectorName) {
         this.connectorName = connectorName;
         return this;
@@ -294,6 +299,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     public String getSourceIdField() {
         return sourceIdField;
     }
+
     public GoogleCloudSearchCommitter setSourceIdField(String sourceIdField) {
         this.sourceIdField = sourceIdField;
         return this;
@@ -302,6 +308,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     public boolean isKeepSourceIdField() {
         return keepSourceIdField;
     }
+
     public GoogleCloudSearchCommitter setKeepSourceIdField(boolean keepSourceIdField) {
         this.keepSourceIdField = keepSourceIdField;
         return this;
@@ -310,6 +317,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     public String getTitleField() {
         return titleField;
     }
+
     public GoogleCloudSearchCommitter setTitleField(String titleField) {
         this.titleField = titleField;
         return this;
@@ -318,6 +326,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     public String getObjectTypeField() {
         return objectTypeField;
     }
+
     public GoogleCloudSearchCommitter setObjectTypeField(String objectTypeField) {
         this.objectTypeField = objectTypeField;
         return this;
@@ -326,6 +335,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     public String getUpdateTimeField() {
         return updateTimeField;
     }
+
     public GoogleCloudSearchCommitter setUpdateTimeField(String updateTimeField) {
         this.updateTimeField = updateTimeField;
         return this;
@@ -334,6 +344,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     public String getContainerNameField() {
         return containerNameField;
     }
+
     public GoogleCloudSearchCommitter setContainerNameField(String containerNameField) {
         this.containerNameField = containerNameField;
         return this;
@@ -342,6 +353,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     public String getContentLanguageField() {
         return contentLanguageField;
     }
+
     public GoogleCloudSearchCommitter setContentLanguageField(
             String contentLanguageField) {
         this.contentLanguageField = contentLanguageField;
@@ -351,6 +363,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     public String getSourceRepositoryUrlField() {
         return sourceRepositoryUrlField;
     }
+
     public GoogleCloudSearchCommitter setSourceRepositoryUrlField(
             String sourceRepositoryUrlField) {
         this.sourceRepositoryUrlField = sourceRepositoryUrlField;
@@ -360,6 +373,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     public UploadFormat getUploadFormat() {
         return uploadFormat;
     }
+
     public GoogleCloudSearchCommitter setUploadFormat(UploadFormat uploadFormat) {
         this.uploadFormat = uploadFormat;
         return this;
@@ -368,6 +382,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     public RequestMode getRequestMode() {
         return requestMode;
     }
+
     public GoogleCloudSearchCommitter setRequestMode(RequestMode requestMode) {
         this.requestMode = requestMode;
         return this;
@@ -376,6 +391,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     public List<AclMapping> getAclMappings() {
         return Collections.unmodifiableList(aclMappings);
     }
+
     public GoogleCloudSearchCommitter setAclMappings(List<AclMapping> aclMappings) {
         this.aclMappings.clear();
         if (aclMappings != null) {
@@ -387,10 +403,12 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     public AclInheritanceMapping getAclInheritance() {
         return aclInheritance;
     }
+
     public GoogleCloudSearchCommitter setAclInheritance(
             AclInheritanceMapping aclInheritance) {
         this.aclInheritance = aclInheritance != null
-                ? aclInheritance : new AclInheritanceMapping();
+                ? aclInheritance
+                : new AclInheritanceMapping();
         return this;
     }
 
@@ -930,7 +948,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         private AclTarget target;
         private PrincipalType principalType;
 
-        public AclMapping() {}
+        public AclMapping() {
+        }
 
         AclMapping(String fromField, AclTarget target,
                 PrincipalType principalType) {
@@ -942,6 +961,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         public String getFromField() {
             return fromField;
         }
+
         public AclMapping setFromField(String fromField) {
             this.fromField = fromField;
             return this;
@@ -950,6 +970,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         public AclTarget getTarget() {
             return target;
         }
+
         public AclMapping setTarget(AclTarget target) {
             this.target = target;
             return this;
@@ -958,6 +979,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         public PrincipalType getPrincipalType() {
             return principalType;
         }
+
         public AclMapping setPrincipalType(PrincipalType principalType) {
             this.principalType = principalType;
             return this;
@@ -968,7 +990,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         private String fromField;
         private AclInheritanceType type = AclInheritanceType.NOT_APPLICABLE;
 
-        public AclInheritanceMapping() {}
+        public AclInheritanceMapping() {
+        }
 
         AclInheritanceMapping(String fromField, AclInheritanceType type) {
             this.fromField = fromField;
@@ -978,6 +1001,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         public String getFromField() {
             return fromField;
         }
+
         public AclInheritanceMapping setFromField(String fromField) {
             this.fromField = fromField;
             return this;
@@ -986,6 +1010,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         public AclInheritanceType getType() {
             return type;
         }
+
         public AclInheritanceMapping setType(AclInheritanceType type) {
             this.type = type != null ? type : AclInheritanceType.NOT_APPLICABLE;
             return this;
