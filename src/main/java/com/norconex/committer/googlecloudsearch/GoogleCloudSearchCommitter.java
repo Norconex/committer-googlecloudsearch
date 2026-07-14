@@ -98,6 +98,13 @@ import com.norconex.commons.lang.xml.XML;
  * Index and delete operations are grouped through Google's batch request API.
  * </p>
  *
+ * <p>
+ * Cloud Search requires every indexed item to carry an ACL. When no
+ * {@code <acl>} mapping resolves to a reader for a given document (or none is
+ * configured at all) and no ACL is being inherited, the item defaults to being
+ * readable by the entire Google Workspace domain.
+ * </p>
+ *
  * {@nx.include com.norconex.committer.core3.AbstractCommitter#restrictTo}
  *
  * {@nx.include com.norconex.committer.core3.AbstractCommitter#fieldMappings}
@@ -627,14 +634,20 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
 
         String parentValue = metadataValue(metadata, aclInheritance.getFromField());
         boolean hasInheritance = StringUtils.isNotBlank(parentValue);
-        if (readers.isEmpty() && deniedReaders.isEmpty() && owners.isEmpty()
-                && !hasInheritance) {
-            return null;
-        }
 
         ItemAcl acl = new ItemAcl();
         if (!readers.isEmpty()) {
             acl.setReaders(readers);
+        } else if (!hasInheritance) {
+            // Cloud Search rejects items with no ACL at all ("Missing Acl in
+            // request"), and inheritance alone does not grant access unless a
+            // parent is set. When no reader mapping resolved to a value and
+            // there is no ACL to inherit from, default to the entire domain
+            // being able to read the item, matching the original Google-built
+            // Norconex connector's documented default of granting read access
+            // to everyone when no ACL information is supplied.
+            acl.setReaders(Collections.singletonList(
+                    toPrincipal(PrincipalType.CUSTOMER, null)));
         }
         if (!deniedReaders.isEmpty()) {
             acl.setDeniedReaders(deniedReaders);

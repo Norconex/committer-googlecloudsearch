@@ -155,6 +155,46 @@ class GoogleCloudSearchCommitterTest {
         }
 
         @Test
+        void commitBatchDefaultsToDomainWideAclWhenNoneConfigured()
+                        throws Exception {
+                // Regression test: Cloud Search rejects items with no ACL at
+                // all ("Missing Acl in request"). When a user configures no
+                // <acl> mapping (documents intended to be public), the
+                // committer must still send an ACL, defaulting to domain-wide
+                // read access instead of omitting the field.
+                RecordingTransport transport = new RecordingTransport();
+                transport.enqueue(jsonResponse(successfulBatchResponseHeader(),
+                                successfulBatchResponseBody("operations/index-1")));
+
+                try (GoogleCloudSearchCommitter subject = new GoogleCloudSearchCommitter(
+                                new TestHelper(transport, 1000L))) {
+                        XML xml = minimalXml(
+                                        new File(tempDir, "placeholder.json").getAbsolutePath(),
+                                        "https://mock.local/");
+                        xml.addElement("uploadFormat", "text");
+                        subject.loadBatchCommitterFromXML(xml);
+                        subject.initBatchCommitter();
+
+                        Properties metadata = new Properties();
+                        metadata.set("title", "Example title");
+                        metadata.set("objectType", "webpage");
+                        metadata.set(GoogleCloudSearchCommitter.FIELD_CONTENT_TYPE, "text/plain");
+
+                        List<ICommitterRequest> requests = new ArrayList<>();
+                        requests.add(new UpsertRequest(
+                                        REFERENCE,
+                                        metadata,
+                                        new ByteArrayInputStream(CONTENT.getBytes(UTF_8))));
+
+                        subject.commitBatch(requests.iterator());
+
+                        String batchBody = transport.getRequests().get(0).getContentAsString();
+                        assertThat(batchBody).contains("\"acl\"");
+                        assertThat(batchBody).contains("gsuiteDomain");
+                }
+        }
+
+        @Test
         void rawUploadCanRunAgainstWireMockEndpoint() throws Exception {
                 WireMockServer server = new WireMockServer();
                 try {
