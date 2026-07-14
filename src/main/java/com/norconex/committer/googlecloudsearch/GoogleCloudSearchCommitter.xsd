@@ -12,6 +12,8 @@
               minOccurs="1" maxOccurs="1" />
             <xs:element name="uploadFormat" type="uploadFormatValue"
               minOccurs="0" maxOccurs="1" />
+            <xs:element name="requestMode" type="requestModeValue"
+              minOccurs="0" maxOccurs="1" />
             <xs:element name="apiEndpoint" type="nonEmptyString"
               minOccurs="0" maxOccurs="1" />
             <xs:element name="applicationName" type="nonEmptyString"
@@ -82,6 +84,12 @@
     <xs:restriction base="xs:string">
       <xs:pattern value="[Tt][Ee][Xx][Tt]" />
       <xs:pattern value="[Rr][Aa][Ww]" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="requestModeValue">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[Ss][Yy][Nn][Cc][Hh][Rr][Oo][Nn][Oo][Uu][Ss]" />
+      <xs:pattern value="[Aa][Ss][Yy][Nn][Cc][Hh][Rr][Oo][Nn][Oo][Uu][Ss]" />
     </xs:restriction>
   </xs:simpleType>
   <xs:simpleType name="aclTargetValue">

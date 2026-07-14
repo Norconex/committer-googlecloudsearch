@@ -160,17 +160,17 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     private static final Logger LOG = LoggerFactory.getLogger(
             GoogleCloudSearchCommitter.class);
 
-    enum UploadFormat {
+    public enum UploadFormat {
         RAW,
         TEXT
     }
 
-    enum RequestMode {
+    public enum RequestMode {
         SYNCHRONOUS,
         ASYNCHRONOUS
     }
 
-    enum AclTarget {
+    public enum AclTarget {
         READERS("readers"),
         DENIED_READERS("deniedReaders"),
         OWNERS("owners");
@@ -195,7 +195,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         }
     }
 
-    enum PrincipalType {
+    public enum PrincipalType {
         USER("user"),
         GROUP("group"),
         CUSTOMER("customer");
@@ -221,7 +221,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         }
     }
 
-    enum AclInheritanceType {
+    public enum AclInheritanceType {
         NOT_APPLICABLE,
         CHILD_OVERRIDE,
         PARENT_OVERRIDE,
@@ -250,6 +250,149 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     private AclInheritanceMapping aclInheritance = new AclInheritanceMapping();
 
     private CloudSearch cloudSearch;
+
+    public String getSecretKeyPath() {
+        return secretKeyPath;
+    }
+    public GoogleCloudSearchCommitter setSecretKeyPath(String secretKeyPath) {
+        this.secretKeyPath = secretKeyPath;
+        return this;
+    }
+
+    public String getDataSourceId() {
+        return dataSourceId;
+    }
+    public GoogleCloudSearchCommitter setDataSourceId(String dataSourceId) {
+        this.dataSourceId = dataSourceId;
+        return this;
+    }
+
+    public String getApiEndpoint() {
+        return apiEndpoint;
+    }
+    public GoogleCloudSearchCommitter setApiEndpoint(String apiEndpoint) {
+        this.apiEndpoint = apiEndpoint;
+        return this;
+    }
+
+    public String getApplicationName() {
+        return applicationName;
+    }
+    public GoogleCloudSearchCommitter setApplicationName(String applicationName) {
+        this.applicationName = applicationName;
+        return this;
+    }
+
+    public String getConnectorName() {
+        return connectorName;
+    }
+    public GoogleCloudSearchCommitter setConnectorName(String connectorName) {
+        this.connectorName = connectorName;
+        return this;
+    }
+
+    public String getSourceIdField() {
+        return sourceIdField;
+    }
+    public GoogleCloudSearchCommitter setSourceIdField(String sourceIdField) {
+        this.sourceIdField = sourceIdField;
+        return this;
+    }
+
+    public boolean isKeepSourceIdField() {
+        return keepSourceIdField;
+    }
+    public GoogleCloudSearchCommitter setKeepSourceIdField(boolean keepSourceIdField) {
+        this.keepSourceIdField = keepSourceIdField;
+        return this;
+    }
+
+    public String getTitleField() {
+        return titleField;
+    }
+    public GoogleCloudSearchCommitter setTitleField(String titleField) {
+        this.titleField = titleField;
+        return this;
+    }
+
+    public String getObjectTypeField() {
+        return objectTypeField;
+    }
+    public GoogleCloudSearchCommitter setObjectTypeField(String objectTypeField) {
+        this.objectTypeField = objectTypeField;
+        return this;
+    }
+
+    public String getUpdateTimeField() {
+        return updateTimeField;
+    }
+    public GoogleCloudSearchCommitter setUpdateTimeField(String updateTimeField) {
+        this.updateTimeField = updateTimeField;
+        return this;
+    }
+
+    public String getContainerNameField() {
+        return containerNameField;
+    }
+    public GoogleCloudSearchCommitter setContainerNameField(String containerNameField) {
+        this.containerNameField = containerNameField;
+        return this;
+    }
+
+    public String getContentLanguageField() {
+        return contentLanguageField;
+    }
+    public GoogleCloudSearchCommitter setContentLanguageField(
+            String contentLanguageField) {
+        this.contentLanguageField = contentLanguageField;
+        return this;
+    }
+
+    public String getSourceRepositoryUrlField() {
+        return sourceRepositoryUrlField;
+    }
+    public GoogleCloudSearchCommitter setSourceRepositoryUrlField(
+            String sourceRepositoryUrlField) {
+        this.sourceRepositoryUrlField = sourceRepositoryUrlField;
+        return this;
+    }
+
+    public UploadFormat getUploadFormat() {
+        return uploadFormat;
+    }
+    public GoogleCloudSearchCommitter setUploadFormat(UploadFormat uploadFormat) {
+        this.uploadFormat = uploadFormat;
+        return this;
+    }
+
+    public RequestMode getRequestMode() {
+        return requestMode;
+    }
+    public GoogleCloudSearchCommitter setRequestMode(RequestMode requestMode) {
+        this.requestMode = requestMode;
+        return this;
+    }
+
+    public List<AclMapping> getAclMappings() {
+        return Collections.unmodifiableList(aclMappings);
+    }
+    public GoogleCloudSearchCommitter setAclMappings(List<AclMapping> aclMappings) {
+        this.aclMappings.clear();
+        if (aclMappings != null) {
+            this.aclMappings.addAll(aclMappings);
+        }
+        return this;
+    }
+
+    public AclInheritanceMapping getAclInheritance() {
+        return aclInheritance;
+    }
+    public GoogleCloudSearchCommitter setAclInheritance(
+            AclInheritanceMapping aclInheritance) {
+        this.aclInheritance = aclInheritance != null
+                ? aclInheritance : new AclInheritanceMapping();
+        return this;
+    }
 
     public GoogleCloudSearchCommitter() {
         this(new Helper());
@@ -782,51 +925,70 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         }
     }
 
-    private static final class AclMapping {
-        private final String fromField;
-        private final AclTarget target;
-        private final PrincipalType principalType;
+    public static class AclMapping {
+        private String fromField;
+        private AclTarget target;
+        private PrincipalType principalType;
 
-        private AclMapping(String fromField, AclTarget target,
+        public AclMapping() {}
+
+        AclMapping(String fromField, AclTarget target,
                 PrincipalType principalType) {
             this.fromField = fromField;
             this.target = target;
             this.principalType = principalType;
         }
 
-        String getFromField() {
+        public String getFromField() {
             return fromField;
         }
-
-        AclTarget getTarget() {
-            return target;
+        public AclMapping setFromField(String fromField) {
+            this.fromField = fromField;
+            return this;
         }
 
-        PrincipalType getPrincipalType() {
+        public AclTarget getTarget() {
+            return target;
+        }
+        public AclMapping setTarget(AclTarget target) {
+            this.target = target;
+            return this;
+        }
+
+        public PrincipalType getPrincipalType() {
             return principalType;
+        }
+        public AclMapping setPrincipalType(PrincipalType principalType) {
+            this.principalType = principalType;
+            return this;
         }
     }
 
-    private static final class AclInheritanceMapping {
-        private final String fromField;
-        private final AclInheritanceType type;
+    public static class AclInheritanceMapping {
+        private String fromField;
+        private AclInheritanceType type = AclInheritanceType.NOT_APPLICABLE;
 
-        private AclInheritanceMapping() {
-            this(null, AclInheritanceType.NOT_APPLICABLE);
-        }
+        public AclInheritanceMapping() {}
 
-        private AclInheritanceMapping(String fromField,
-                AclInheritanceType type) {
+        AclInheritanceMapping(String fromField, AclInheritanceType type) {
             this.fromField = fromField;
             this.type = type;
         }
 
-        String getFromField() {
+        public String getFromField() {
             return fromField;
         }
+        public AclInheritanceMapping setFromField(String fromField) {
+            this.fromField = fromField;
+            return this;
+        }
 
-        AclInheritanceType getType() {
+        public AclInheritanceType getType() {
             return type;
+        }
+        public AclInheritanceMapping setType(AclInheritanceType type) {
+            this.type = type != null ? type : AclInheritanceType.NOT_APPLICABLE;
+            return this;
         }
     }
 
