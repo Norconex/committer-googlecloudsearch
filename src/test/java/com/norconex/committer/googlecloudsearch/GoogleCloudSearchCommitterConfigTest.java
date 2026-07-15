@@ -40,10 +40,14 @@ class GoogleCloudSearchCommitterConfigTest {
                 committer.setKeepSourceIdField(true);
                 committer.setTitleField("document_title");
                 committer.setObjectTypeField("doc_type");
+                committer.setObjectTypeDefaultValue("webpage");
                 committer.setUpdateTimeField("last_updated");
+                committer.setCreateTimeField("first_seen");
                 committer.setContainerNameField("collection_name");
                 committer.setContentLanguageField("language");
+                committer.setContentLanguageDefaultValue("en-US");
                 committer.setSourceRepositoryUrlField("source_url");
+                committer.setTypedStructuredData(true);
                 committer.setUploadFormat(GoogleCloudSearchCommitter.UploadFormat.TEXT);
                 committer.setRequestMode(GoogleCloudSearchCommitter.RequestMode.SYNCHRONOUS);
 
@@ -94,10 +98,14 @@ class GoogleCloudSearchCommitterConfigTest {
                 assertThat(loaded.isKeepSourceIdField()).isTrue();
                 assertThat(loaded.getTitleField()).isEqualTo("document_title");
                 assertThat(loaded.getObjectTypeField()).isEqualTo("doc_type");
+                assertThat(loaded.getObjectTypeDefaultValue()).isEqualTo("webpage");
                 assertThat(loaded.getUpdateTimeField()).isEqualTo("last_updated");
+                assertThat(loaded.getCreateTimeField()).isEqualTo("first_seen");
                 assertThat(loaded.getContainerNameField()).isEqualTo("collection_name");
                 assertThat(loaded.getContentLanguageField()).isEqualTo("language");
+                assertThat(loaded.getContentLanguageDefaultValue()).isEqualTo("en-US");
                 assertThat(loaded.getSourceRepositoryUrlField()).isEqualTo("source_url");
+                assertThat(loaded.isTypedStructuredData()).isTrue();
                 assertThat(loaded.getUploadFormat())
                                 .isEqualTo(GoogleCloudSearchCommitter.UploadFormat.TEXT);
                 assertThat(loaded.getRequestMode())

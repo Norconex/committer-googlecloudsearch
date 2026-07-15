@@ -28,13 +28,21 @@
               minOccurs="0" maxOccurs="1" />
             <xs:element name="objectTypeField" type="nonEmptyString"
               minOccurs="0" maxOccurs="1" />
+            <xs:element name="objectTypeDefaultValue" type="nonEmptyString"
+              minOccurs="0" maxOccurs="1" />
             <xs:element name="updateTimeField" type="nonEmptyString"
+              minOccurs="0" maxOccurs="1" />
+            <xs:element name="createTimeField" type="nonEmptyString"
               minOccurs="0" maxOccurs="1" />
             <xs:element name="containerNameField" type="nonEmptyString"
               minOccurs="0" maxOccurs="1" />
             <xs:element name="contentLanguageField" type="nonEmptyString"
               minOccurs="0" maxOccurs="1" />
+            <xs:element name="contentLanguageDefaultValue" type="nonEmptyString"
+              minOccurs="0" maxOccurs="1" />
             <xs:element name="sourceRepositoryUrlField" type="nonEmptyString"
+              minOccurs="0" maxOccurs="1" />
+            <xs:element name="typedStructuredData" type="xs:boolean"
               minOccurs="0" maxOccurs="1" />
             <xs:element name="acl" minOccurs="0" maxOccurs="1">
               <xs:annotation>
