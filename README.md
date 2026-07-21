@@ -59,15 +59,15 @@ committer.
 	<connectorName>Norconex GCS Connector</connectorName>
 	<sourceIdField>document.reference</sourceIdField>
 	<keepSourceIdField>false</keepSourceIdField>
-	<titleField>title</titleField>
-	<objectTypeField>document.type</objectTypeField>
-	<objectTypeDefaultValue>webpage</objectTypeDefaultValue>
-	<updateTimeField>Last-Modified</updateTimeField>
-	<createTimeField>created</createTimeField>
-	<containerNameField>parentTitle</containerNameField>
-	<contentLanguageField>document.language</contentLanguageField>
-	<contentLanguageDefaultValue>en-US</contentLanguageDefaultValue>
-	<sourceRepositoryUrlField>sourceUrl</sourceRepositoryUrlField>
+	<metadata>
+		<mapping fromField="title" toField="title"/>
+		<mapping fromField="document.type" toField="objectType" defaultValue="webpage"/>
+		<mapping fromField="Last-Modified" toField="updateTime"/>
+		<mapping fromField="created" toField="createTime"/>
+		<mapping fromField="parentTitle" toField="containerName"/>
+		<mapping fromField="document.language" toField="contentLanguage" defaultValue="en-US"/>
+		<mapping fromField="sourceUrl" toField="sourceRepositoryUrl"/>
+	</metadata>
 	<typedStructuredData>true</typedStructuredData>
 
 	<acl>
@@ -85,26 +85,21 @@ committer.
 
 ### Option Reference
 
-| Element                       | Required | Default                                  | Description                                                                                                                                                                                                  |
-| ----------------------------- | -------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `secretKeyPath`               | Yes      | None                                     | Absolute or relative path to the Google service account JSON key file used to authenticate indexing requests.                                                                                                |
-| `dataSourceId`                | Yes      | None                                     | Google Cloud Search data source ID. Item names are built as `datasources/{dataSourceId}/items/{itemId}`.                                                                                                     |
-| `uploadFormat`                | No       | `raw`                                    | Controls how content is sent to Google Cloud Search. Use `raw` to index binary/original content, or `text` to index the committer request text content.                                                      |
-| `apiEndpoint`                 | No       | Google production endpoint               | Overrides the Google Cloud Search root URL. Use this for local WireMock or other mock endpoints. A trailing slash is optional.                                                                               |
-| `applicationName`             | No       | `Norconex Google Cloud Search Committer` | Value passed to the Google client as the application name. Useful for logs, monitoring, and distinguishing this connector in HTTP client metadata.                                                           |
-| `connectorName`               | No       | Same as `applicationName`                | Value sent in Google indexing requests as `connectorName`. Set this when your Cloud Search connector identity must differ from the application name.                                                         |
-| `sourceIdField`               | No       | Document reference                       | Metadata field to use as the source item ID instead of the Norconex request reference. The chosen value is encoded into a safe Google item ID.                                                               |
-| `keepSourceIdField`           | No       | `false`                                  | Whether the metadata field referenced by `sourceIdField` should remain in document metadata after it has been used as the item ID source.                                                                    |
-| `titleField`                  | No       | `title`                                  | Metadata field mapped to Google `ItemMetadata.title`.                                                                                                                                                        |
-| `objectTypeField`             | No       | `objectType`                             | Metadata field mapped to Google `ItemMetadata.objectType`. If the field is absent or blank, the committer uses `document`.                                                                                   |
-| `objectTypeDefaultValue`      | No       | `document`                               | Default value for `ItemMetadata.objectType` when `objectTypeField` is missing or blank.                                                                                                                      |
-| `updateTimeField`             | No       | `Last-Modified`                          | Metadata field mapped to Google `ItemMetadata.updateTime`. Supported formats include ISO-8601 instants and offsets, RFC-1123 dates, and local date-times interpreted as UTC. Unparseable values are ignored. |
-| `createTimeField`             | No       | None                                     | Metadata field mapped to Google `ItemMetadata.createTime` using the same date parsing rules as `updateTimeField`.                                                                                            |
-| `containerNameField`          | No       | None                                     | Metadata field mapped to Google `ItemMetadata.containerName`. Useful for parent labels or logical folder/container names.                                                                                    |
-| `contentLanguageField`        | No       | None                                     | Metadata field mapped to Google `ItemMetadata.contentLanguage`.                                                                                                                                              |
-| `contentLanguageDefaultValue` | No       | None                                     | Default value for `ItemMetadata.contentLanguage` when `contentLanguageField` is missing or blank.                                                                                                            |
-| `sourceRepositoryUrlField`    | No       | Norconex document reference              | Metadata field mapped to Google `ItemMetadata.sourceRepositoryUrl`. If the mapped field is missing or blank, the committer falls back to the Norconex request reference.                                     |
-| `typedStructuredData`         | No       | `false`                                  | Enables best-effort type inference for structured data values (integer, double, date, timestamp, enum). Values that cannot be mapped to a supported typed field are sent as text.                            |
+| Element               | Required | Default                                  | Description                                                                                                                                                                                                                                                                                                                                          |
+| --------------------- | -------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `secretKeyPath`       | Yes      | None                                     | Absolute or relative path to the Google service account JSON key file used to authenticate indexing requests.                                                                                                                                                                                                                                        |
+| `dataSourceId`        | Yes      | None                                     | Google Cloud Search data source ID. Item names are built as `datasources/{dataSourceId}/items/{itemId}`.                                                                                                                                                                                                                                             |
+| `uploadFormat`        | No       | `raw`                                    | Controls how content is sent to Google Cloud Search. Use `raw` to index binary/original content, or `text` to index the committer request text content.                                                                                                                                                                                              |
+| `apiEndpoint`         | No       | Google production endpoint               | Overrides the Google Cloud Search root URL. Use this for local WireMock or other mock endpoints. A trailing slash is optional.                                                                                                                                                                                                                       |
+| `applicationName`     | No       | `Norconex Google Cloud Search Committer` | Value passed to the Google client as the application name. Useful for logs, monitoring, and distinguishing this connector in HTTP client metadata.                                                                                                                                                                                                   |
+| `connectorName`       | No       | Same as `applicationName`                | Value sent in Google indexing requests as `connectorName`. Set this when your Cloud Search connector identity must differ from the application name.                                                                                                                                                                                                 |
+| `sourceIdField`       | No       | Document reference                       | Metadata field to use as the source item ID instead of the Norconex request reference. The chosen value is encoded into a safe Google item ID.                                                                                                                                                                                                       |
+| `keepSourceIdField`   | No       | `false`                                  | Whether the metadata field referenced by `sourceIdField` should remain in document metadata after it has been used as the item ID source.                                                                                                                                                                                                            |
+| `metadata`            | No       | Built-in defaults                        | Mapping section for Google predefined metadata fields. Each `mapping` supports `fromField` (optional), `toField` (required), `defaultValue` (optional), and `keepFromField` (optional). Supported `toField` values are `title`, `objectType`, `mimeType`, `updateTime`, `createTime`, `containerName`, `contentLanguage`, and `sourceRepositoryUrl`. |
+| `typedStructuredData` | No       | `false`                                  | Enables best-effort type inference for structured data values (integer, double, date, timestamp, enum). Values that cannot be mapped to a supported typed field are sent as text.                                                                                                                                                                    |
+
+Google reference for predefined metadata fields:
+https://developers.google.com/workspace/cloud-search/docs/reference/rest/v1/ItemMetadata
 
 ## ACL Configuration
 

@@ -21,9 +21,12 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.http.HttpHeaders;
+import java.rmi.server.Operation;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.Principal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -38,8 +41,11 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
+
+import javax.print.attribute.standard.Media;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -51,13 +57,11 @@ import com.google.api.client.googleapis.batch.json.JsonBatchCallback;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.googleapis.json.GoogleJsonError;
 import com.google.api.client.http.ByteArrayContent;
-import com.google.api.client.http.HttpHeaders;
 import com.google.api.client.http.HttpRequestInitializer;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.cloudsearch.v1.CloudSearch;
-import com.google.api.services.cloudsearch.v1.model.Date;
 import com.google.api.services.cloudsearch.v1.model.DateValues;
 import com.google.api.services.cloudsearch.v1.model.DoubleValues;
 import com.google.api.services.cloudsearch.v1.model.EnumValues;
@@ -69,10 +73,7 @@ import com.google.api.services.cloudsearch.v1.model.ItemAcl;
 import com.google.api.services.cloudsearch.v1.model.ItemContent;
 import com.google.api.services.cloudsearch.v1.model.ItemMetadata;
 import com.google.api.services.cloudsearch.v1.model.ItemStructuredData;
-import com.google.api.services.cloudsearch.v1.model.Media;
 import com.google.api.services.cloudsearch.v1.model.NamedProperty;
-import com.google.api.services.cloudsearch.v1.model.Operation;
-import com.google.api.services.cloudsearch.v1.model.Principal;
 import com.google.api.services.cloudsearch.v1.model.StartUploadItemRequest;
 import com.google.api.services.cloudsearch.v1.model.StructuredDataObject;
 import com.google.api.services.cloudsearch.v1.model.TextValues;
@@ -87,7 +88,6 @@ import com.norconex.committer.core3.DeleteRequest;
 import com.norconex.committer.core3.ICommitterRequest;
 import com.norconex.committer.core3.UpsertRequest;
 import com.norconex.committer.core3.batch.AbstractBatchCommitter;
-import com.norconex.commons.lang.map.Properties;
 import com.norconex.commons.lang.xml.XML;
 
 /**
@@ -140,6 +140,9 @@ import com.norconex.commons.lang.xml.XML;
 @SuppressWarnings("javadoc")
 public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
 
+    private static final Logger log = LoggerFactory.getLogger(
+            GoogleCloudSearchCommitter.class);
+
     static final String FIELD_BINARY_CONTENT = "binaryContent";
     static final String FIELD_CONTENT_TYPE = "document.contentType";
 
@@ -152,30 +155,20 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     static final String CONFIG_CONNECTOR_NAME = "connectorName";
     static final String CONFIG_SOURCE_ID_FIELD = "sourceIdField";
     static final String CONFIG_KEEP_SOURCE_ID_FIELD = "keepSourceIdField";
-    static final String CONFIG_TITLE_FIELD = "titleField";
-    static final String CONFIG_OBJECT_TYPE_FIELD = "objectTypeField";
-    static final String CONFIG_OBJECT_TYPE_DEFAULT_VALUE = "objectTypeDefaultValue";
-    static final String CONFIG_UPDATE_TIME_FIELD = "updateTimeField";
-    static final String CONFIG_CREATE_TIME_FIELD = "createTimeField";
-    static final String CONFIG_CONTAINER_NAME_FIELD = "containerNameField";
-    static final String CONFIG_CONTENT_LANGUAGE_FIELD = "contentLanguageField";
-    static final String CONFIG_CONTENT_LANGUAGE_DEFAULT_VALUE = "contentLanguageDefaultValue";
-    static final String CONFIG_SOURCE_REPOSITORY_URL_FIELD = "sourceRepositoryUrlField";
+    static final String CONFIG_METADATA = "metadata";
     static final String CONFIG_TYPED_STRUCTURED_DATA = "typedStructuredData";
 
     static final String DEFAULT_APPLICATION_NAME = "Norconex Google Cloud Search Committer";
-    static final String DEFAULT_TITLE_FIELD = "title";
-    static final String DEFAULT_OBJECT_TYPE_FIELD = "objectType";
+    static final String DEFAULT_TITLE_SOURCE_FIELD = "title";
+    static final String DEFAULT_OBJECT_TYPE_SOURCE_FIELD = "objectType";
     static final String DEFAULT_OBJECT_TYPE = "document";
-    static final String DEFAULT_UPDATE_TIME_FIELD = "Last-Modified";
+    static final String DEFAULT_UPDATE_TIME_SOURCE_FIELD = "Last-Modified";
     static final String DEFAULT_TEXT_CONTENT_TYPE = "text/plain";
     static final String DEFAULT_BINARY_CONTENT_TYPE = "application/octet-stream";
     static final int INLINE_CONTENT_MAX_BYTES = 102400;
 
     private static final String INDEXING_SCOPE = "https://www.googleapis.com/auth/cloud_search.indexing";
     private static final String CONTENT_ITEM_TYPE = "CONTENT_ITEM";
-    private static final Logger LOG = LoggerFactory.getLogger(
-            GoogleCloudSearchCommitter.class);
 
     public enum UploadFormat {
         RAW,
@@ -204,7 +197,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
                     return target;
                 }
             }
-            throw new IllegalArgumentException("Unsupported ACL target: " + value);
+            throw new IllegalArgumentException(
+                    "Unsupported ACL target: " + value);
         }
 
         String getXmlValue() {
@@ -245,8 +239,48 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         BOTH_PERMIT
     }
 
+    /**
+     * Supported Google Cloud Search item metadata targets.
+     *
+     * See Google reference:
+     * https://developers.google.com/workspace/cloud-search/docs/reference/rest/v1/ItemMetadata
+     */
+    public enum MetadataField {
+        TITLE("title"),
+        OBJECT_TYPE("objectType"),
+        MIME_TYPE("mimeType"),
+        UPDATE_TIME("updateTime"),
+        CREATE_TIME("createTime"),
+        CONTAINER_NAME("containerName"),
+        CONTENT_LANGUAGE("contentLanguage"),
+        SOURCE_REPOSITORY_URL("sourceRepositoryUrl");
+
+        private final String xmlValue;
+
+        MetadataField(String xmlValue) {
+            this.xmlValue = xmlValue;
+        }
+
+        static MetadataField fromXmlValue(String value) {
+            if (value == null) {
+                return null;
+            }
+            for (MetadataField field : values()) {
+                if (field.xmlValue.equalsIgnoreCase(value)) {
+                    return field;
+                }
+            }
+            return null;
+        }
+
+        String getXmlValue() {
+            return xmlValue;
+        }
+    }
+
     private final Helper helper;
     private final List<AclMapping> aclMappings = new ArrayList<>();
+    private final List<MetadataMapping> metadataMappings = new ArrayList<>();
     private final AtomicLong versionSequence = new AtomicLong();
 
     private String secretKeyPath;
@@ -256,15 +290,6 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     private String connectorName = DEFAULT_APPLICATION_NAME;
     private String sourceIdField;
     private boolean keepSourceIdField;
-    private String titleField = DEFAULT_TITLE_FIELD;
-    private String objectTypeField = DEFAULT_OBJECT_TYPE_FIELD;
-    private String objectTypeDefaultValue = DEFAULT_OBJECT_TYPE;
-    private String updateTimeField = DEFAULT_UPDATE_TIME_FIELD;
-    private String createTimeField;
-    private String containerNameField;
-    private String contentLanguageField;
-    private String contentLanguageDefaultValue;
-    private String sourceRepositoryUrlField;
     private boolean typedStructuredData;
     private UploadFormat uploadFormat = UploadFormat.RAW;
     private RequestMode requestMode = RequestMode.ASYNCHRONOUS;
@@ -335,88 +360,16 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         return this;
     }
 
-    public String getTitleField() {
-        return titleField;
+    public List<MetadataMapping> getMetadataMappings() {
+        return Collections.unmodifiableList(metadataMappings);
     }
 
-    public GoogleCloudSearchCommitter setTitleField(String titleField) {
-        this.titleField = titleField;
-        return this;
-    }
-
-    public String getObjectTypeField() {
-        return objectTypeField;
-    }
-
-    public GoogleCloudSearchCommitter setObjectTypeField(String objectTypeField) {
-        this.objectTypeField = objectTypeField;
-        return this;
-    }
-
-    public String getObjectTypeDefaultValue() {
-        return objectTypeDefaultValue;
-    }
-
-    public GoogleCloudSearchCommitter setObjectTypeDefaultValue(
-            String objectTypeDefaultValue) {
-        this.objectTypeDefaultValue = objectTypeDefaultValue;
-        return this;
-    }
-
-    public String getUpdateTimeField() {
-        return updateTimeField;
-    }
-
-    public GoogleCloudSearchCommitter setUpdateTimeField(String updateTimeField) {
-        this.updateTimeField = updateTimeField;
-        return this;
-    }
-
-    public String getCreateTimeField() {
-        return createTimeField;
-    }
-
-    public GoogleCloudSearchCommitter setCreateTimeField(String createTimeField) {
-        this.createTimeField = createTimeField;
-        return this;
-    }
-
-    public String getContainerNameField() {
-        return containerNameField;
-    }
-
-    public GoogleCloudSearchCommitter setContainerNameField(String containerNameField) {
-        this.containerNameField = containerNameField;
-        return this;
-    }
-
-    public String getContentLanguageField() {
-        return contentLanguageField;
-    }
-
-    public GoogleCloudSearchCommitter setContentLanguageField(
-            String contentLanguageField) {
-        this.contentLanguageField = contentLanguageField;
-        return this;
-    }
-
-    public String getContentLanguageDefaultValue() {
-        return contentLanguageDefaultValue;
-    }
-
-    public GoogleCloudSearchCommitter setContentLanguageDefaultValue(
-            String contentLanguageDefaultValue) {
-        this.contentLanguageDefaultValue = contentLanguageDefaultValue;
-        return this;
-    }
-
-    public String getSourceRepositoryUrlField() {
-        return sourceRepositoryUrlField;
-    }
-
-    public GoogleCloudSearchCommitter setSourceRepositoryUrlField(
-            String sourceRepositoryUrlField) {
-        this.sourceRepositoryUrlField = sourceRepositoryUrlField;
+    public GoogleCloudSearchCommitter setMetadataMappings(
+            List<MetadataMapping> metadataMappings) {
+        this.metadataMappings.clear();
+        if (metadataMappings != null) {
+            this.metadataMappings.addAll(metadataMappings);
+        }
         return this;
     }
 
@@ -519,7 +472,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
             if (operationCount > 0) {
                 helper.executeBatch(batch);
                 failures.throwIfAny();
-                LOG.info("Sent {} commit operations to Google Cloud Search.",
+                log.info("Sent {} commit operations to Google Cloud Search.",
                         operationCount);
             }
         } catch (CommitterException e) {
@@ -531,7 +484,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     }
 
     private void queueUpsert(BatchRequest batch, UpsertRequest request,
-            BatchFailureCollector failures) throws IOException, CommitterException {
+            BatchFailureCollector failures)
+            throws IOException, CommitterException {
         String sourceId = CommitterUtil.extractSourceIdValue(
                 request, sourceIdField, keepSourceIdField);
         String itemName = buildItemName(sourceId);
@@ -563,7 +517,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     }
 
     private void queueDelete(BatchRequest batch, DeleteRequest request,
-            BatchFailureCollector failures) throws IOException, CommitterException {
+            BatchFailureCollector failures)
+            throws IOException, CommitterException {
         String sourceId = CommitterUtil.extractSourceIdValue(
                 request, sourceIdField, keepSourceIdField);
         String itemName = buildItemName(sourceId);
@@ -575,33 +530,45 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
                 .queue(batch, failures);
     }
 
-    private ItemMetadata buildMetadata(UpsertRequest request, String contentType) {
+    private ItemMetadata buildMetadata(UpsertRequest request,
+            String contentType) {
         Properties metadata = request.getMetadata();
         ItemMetadata itemMetadata = new ItemMetadata();
 
-        String title = metadata.getString(titleField);
+        String title = resolveMetadataValue(metadata, MetadataField.TITLE,
+                request.getReference(), contentType);
         if (StringUtils.isNotBlank(title)) {
             itemMetadata.setTitle(title);
         }
 
-        String objectType = metadata.getString(objectTypeField);
-        itemMetadata.setObjectType(StringUtils.defaultIfBlank(
-                objectType, objectTypeDefaultValue));
-        itemMetadata.setMimeType(contentType);
+        String objectType = resolveMetadataValue(metadata,
+                MetadataField.OBJECT_TYPE, request.getReference(), contentType);
+        if (StringUtils.isNotBlank(objectType)) {
+            itemMetadata.setObjectType(objectType);
+        }
 
-        String containerName = metadataValue(metadata, containerNameField);
+        String mimeType = resolveMetadataValue(metadata,
+                MetadataField.MIME_TYPE, request.getReference(), contentType);
+        if (StringUtils.isNotBlank(mimeType)) {
+            itemMetadata.setMimeType(mimeType);
+        }
+
+        String containerName = resolveMetadataValue(metadata,
+                MetadataField.CONTAINER_NAME, request.getReference(),
+                contentType);
         if (StringUtils.isNotBlank(containerName)) {
             itemMetadata.setContainerName(containerName);
         }
 
-        String contentLanguage = metadataValue(metadata, contentLanguageField);
-        contentLanguage = StringUtils.defaultIfBlank(
-                contentLanguage, contentLanguageDefaultValue);
+        String contentLanguage = resolveMetadataValue(metadata,
+                MetadataField.CONTENT_LANGUAGE, request.getReference(),
+                contentType);
         if (StringUtils.isNotBlank(contentLanguage)) {
             itemMetadata.setContentLanguage(contentLanguage);
         }
 
-        String updateTime = metadataValue(metadata, updateTimeField);
+        String updateTime = resolveMetadataValue(metadata, MetadataField.UPDATE_TIME,
+                request.getReference(), contentType);
         if (StringUtils.isNotBlank(updateTime)) {
             String parsedTime = toRfc3339(updateTime);
             if (parsedTime != null) {
@@ -609,7 +576,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
             }
         }
 
-        String createTime = metadataValue(metadata, createTimeField);
+        String createTime = resolveMetadataValue(metadata, MetadataField.CREATE_TIME,
+                request.getReference(), contentType);
         if (StringUtils.isNotBlank(createTime)) {
             String parsedTime = toRfc3339(createTime);
             if (parsedTime != null) {
@@ -617,15 +585,64 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
             }
         }
 
-        String sourceRepositoryUrl = StringUtils.isNotBlank(sourceRepositoryUrlField)
-                ? metadataValue(metadata, sourceRepositoryUrlField)
-                : null;
-        sourceRepositoryUrl = StringUtils.defaultIfBlank(
-                sourceRepositoryUrl, request.getReference());
+        String sourceRepositoryUrl = resolveMetadataValue(metadata,
+                MetadataField.SOURCE_REPOSITORY_URL, request.getReference(),
+                contentType);
         if (StringUtils.isNotBlank(sourceRepositoryUrl)) {
             itemMetadata.setSourceRepositoryUrl(sourceRepositoryUrl);
         }
         return itemMetadata;
+    }
+
+    private String resolveMetadataValue(Properties metadata,
+            MetadataField field,
+            String reference,
+            String contentType) {
+        MetadataMapping mapping = findMetadataMapping(field);
+        if (mapping != null) {
+            String value = metadataValue(metadata, mapping.getFromField());
+            value = StringUtils.defaultIfBlank(value,
+                    mapping.getDefaultValue());
+            if (StringUtils.isNotBlank(value)) {
+                return value;
+            }
+        }
+
+        switch (field) {
+            case TITLE:
+                return metadataValue(metadata, DEFAULT_TITLE_SOURCE_FIELD);
+            case OBJECT_TYPE:
+                return StringUtils.defaultIfBlank(
+                        metadataValue(metadata,
+                                DEFAULT_OBJECT_TYPE_SOURCE_FIELD),
+                        DEFAULT_OBJECT_TYPE);
+            case MIME_TYPE:
+                return contentType;
+            case UPDATE_TIME:
+                return metadataValue(metadata,
+                        DEFAULT_UPDATE_TIME_SOURCE_FIELD);
+            case CREATE_TIME:
+            case CONTAINER_NAME:
+            case CONTENT_LANGUAGE:
+                return null;
+            case SOURCE_REPOSITORY_URL:
+                return reference;
+            default:
+                return null;
+        }
+    }
+
+    private MetadataMapping findMetadataMapping(MetadataField targetField) {
+        for (MetadataMapping mapping : metadataMappings) {
+            if (mapping == null || StringUtils.isBlank(mapping.getToField())) {
+                continue;
+            }
+            MetadataField field = MetadataField.fromXmlValue(mapping.getToField());
+            if (field == targetField) {
+                return mapping;
+            }
+        }
+        return null;
     }
 
     private ItemStructuredData buildStructuredData(Properties metadata) {
@@ -650,37 +667,43 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     private NamedProperty toNamedProperty(String name, List<String> values) {
         NamedProperty property = new NamedProperty().setName(name);
         if (!typedStructuredData) {
-            property.setTextValues(new TextValues().setValues(new ArrayList<>(values)));
+            property.setTextValues(
+                    new TextValues().setValues(new ArrayList<>(values)));
             return property;
         }
 
-        List<Date> dates = parseAllDates(values);
+        List<com.google.api.services.cloudsearch.v1.model.Date> dates = parseAllDates(values);
         if (dates != null) {
             property.setDateValues(new DateValues().setValues(dates));
             return property;
         }
 
         if (allMatch(values, this::isRfc3339Timestamp)) {
-            property.setTimestampValues(new TimestampValues().setValues(new ArrayList<>(values)));
+            property.setTimestampValues(
+                    new TimestampValues().setValues(new ArrayList<>(values)));
             return property;
         }
 
         if (allMatch(values, this::isLong)) {
-            property.setIntegerValues(new IntegerValues().setValues(toLongs(values)));
+            property.setIntegerValues(
+                    new IntegerValues().setValues(toLongs(values)));
             return property;
         }
 
         if (allMatch(values, this::isDouble)) {
-            property.setDoubleValues(new DoubleValues().setValues(toDoubles(values)));
+            property.setDoubleValues(
+                    new DoubleValues().setValues(toDoubles(values)));
             return property;
         }
 
         if (allMatch(values, this::isEnumLike)) {
-            property.setEnumValues(new EnumValues().setValues(new ArrayList<>(values)));
+            property.setEnumValues(
+                    new EnumValues().setValues(new ArrayList<>(values)));
             return property;
         }
 
-        property.setTextValues(new TextValues().setValues(new ArrayList<>(values)));
+        property.setTextValues(
+                new TextValues().setValues(new ArrayList<>(values)));
         return property;
     }
 
@@ -710,10 +733,10 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         return doubles;
     }
 
-    private List<Date> parseAllDates(List<String> values) {
-        List<Date> dates = new ArrayList<>(values.size());
+    private List<com.google.api.services.cloudsearch.v1.model.Date> parseAllDates(List<String> values) {
+        List<com.google.api.services.cloudsearch.v1.model.Date> dates = new ArrayList<>(values.size());
         for (String value : values) {
-            Date date = toDateValue(value);
+            com.google.api.services.cloudsearch.v1.model.Date date = toDateValue(value);
             if (date == null) {
                 return null;
             }
@@ -722,10 +745,11 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         return dates;
     }
 
-    private Date toDateValue(String value) {
+    private com.google.api.services.cloudsearch.v1.model.Date toDateValue(
+            String value) {
         try {
             var date = java.time.LocalDate.parse(value);
-            return new Date()
+            return new com.google.api.services.cloudsearch.v1.model.Date()
                     .setYear(date.getYear())
                     .setMonth(date.getMonthValue())
                     .setDay(date.getDayOfMonth());
@@ -785,6 +809,13 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         if (StringUtils.isNotBlank(aclInheritance.getFromField())) {
             excludedFields.add(aclInheritance.getFromField());
         }
+        for (MetadataMapping mapping : metadataMappings) {
+            if (mapping != null
+                    && !mapping.isKeepFromField()
+                    && StringUtils.isNotBlank(mapping.getFromField())) {
+                excludedFields.add(mapping.getFromField());
+            }
+        }
         return excludedFields;
     }
 
@@ -815,7 +846,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
                         break;
                     default:
                         throw new CommitterException(
-                                "Unsupported ACL target: " + mapping.getTarget());
+                                "Unsupported ACL target: "
+                                        + mapping.getTarget());
                 }
             }
         }
@@ -870,7 +902,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     private ItemContent buildItemContent(UpsertRequest request, String itemName,
             String contentType) throws IOException, CommitterException {
         if (uploadFormat == UploadFormat.RAW) {
-            return uploadContent(itemName, contentType, loadRawContent(request), "RAW");
+            return uploadContent(itemName, contentType, loadRawContent(request),
+                    "RAW");
         }
 
         byte[] textBytes = IOUtils.toString(request.getContent(), UTF_8)
@@ -913,7 +946,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         if (encoded != null) {
             return Base64.getDecoder().decode(encoded);
         }
-        LOG.warn("Raw upload selected but '{}' is missing. Falling back to "
+        log.warn("Raw upload selected but '{}' is missing. Falling back to "
                 + "request content for {}.", FIELD_BINARY_CONTENT,
                 request.getReference());
         return IOUtils.toByteArray(request.getContent());
@@ -933,7 +966,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         if (StringUtils.isBlank(sourceId)) {
             throw new CommitterException("Document id cannot be empty.");
         }
-        return "datasources/" + dataSourceId + "/items/" + encodeItemId(sourceId);
+        return "datasources/" + dataSourceId + "/items/"
+                + encodeItemId(sourceId);
     }
 
     private String encodeItemId(String sourceId) {
@@ -978,15 +1012,17 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
             // Try other supported formats.
         }
         try {
-            return ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME)
+            return ZonedDateTime
+                    .parse(value, DateTimeFormatter.RFC_1123_DATE_TIME)
                     .toInstant().toString();
         } catch (DateTimeParseException e) {
             // Try other supported formats.
         }
         try {
-            return LocalDateTime.parse(value).toInstant(ZoneOffset.UTC).toString();
+            return LocalDateTime.parse(value).toInstant(ZoneOffset.UTC)
+                    .toString();
         } catch (DateTimeParseException e) {
-            LOG.debug("Ignoring unparsable updateTime value '{}'.", value);
+            log.debug("Ignoring unparsable updateTime value '{}'.", value);
         }
         return null;
     }
@@ -1012,6 +1048,17 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         if (StringUtils.isBlank(connectorName)) {
             connectorName = applicationName;
         }
+        for (MetadataMapping mapping : metadataMappings) {
+            if (mapping == null || StringUtils.isBlank(mapping.getToField())) {
+                throw new CommitterException(
+                        "Each metadata mapping must declare a non-blank toField.");
+            }
+            if (MetadataField.fromXmlValue(mapping.getToField()) == null) {
+                throw new CommitterException(
+                        "Unsupported metadata mapping toField: "
+                                + mapping.getToField());
+            }
+        }
     }
 
     @Override
@@ -1025,20 +1072,6 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         sourceIdField = xml.getString(CONFIG_SOURCE_ID_FIELD, sourceIdField);
         keepSourceIdField = xml.getBoolean(
                 CONFIG_KEEP_SOURCE_ID_FIELD, keepSourceIdField);
-        titleField = xml.getString(CONFIG_TITLE_FIELD, titleField);
-        objectTypeField = xml.getString(CONFIG_OBJECT_TYPE_FIELD, objectTypeField);
-        objectTypeDefaultValue = xml.getString(
-                CONFIG_OBJECT_TYPE_DEFAULT_VALUE, objectTypeDefaultValue);
-        updateTimeField = xml.getString(CONFIG_UPDATE_TIME_FIELD, updateTimeField);
-        createTimeField = xml.getString(CONFIG_CREATE_TIME_FIELD, createTimeField);
-        containerNameField = xml.getString(
-                CONFIG_CONTAINER_NAME_FIELD, containerNameField);
-        contentLanguageField = xml.getString(
-                CONFIG_CONTENT_LANGUAGE_FIELD, contentLanguageField);
-        contentLanguageDefaultValue = xml.getString(
-                CONFIG_CONTENT_LANGUAGE_DEFAULT_VALUE, contentLanguageDefaultValue);
-        sourceRepositoryUrlField = xml.getString(
-                CONFIG_SOURCE_REPOSITORY_URL_FIELD, sourceRepositoryUrlField);
         typedStructuredData = xml.getBoolean(
                 CONFIG_TYPED_STRUCTURED_DATA, typedStructuredData);
 
@@ -1050,20 +1083,33 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
                 CONFIG_REQUEST_MODE, requestMode.name());
         requestMode = RequestMode.valueOf(requestModeValue.toUpperCase());
 
+        metadataMappings.clear();
+        for (XML mappingXml : xml.getXMLList(CONFIG_METADATA + "/mapping")) {
+            metadataMappings.add(new MetadataMapping(
+                    mappingXml.getString("@fromField", null),
+                    mappingXml.getString("@toField", null),
+                    mappingXml.getString("@defaultValue", null),
+                    mappingXml.getBoolean("@keepFromField", false)));
+        }
+
         aclMappings.clear();
         for (XML mappingXml : xml.getXMLList("acl/mapping")) {
             aclMappings.add(new AclMapping(
                     mappingXml.getString("@fromField", null),
-                    AclTarget.fromXmlValue(mappingXml.getString("@target", null)),
+                    AclTarget.fromXmlValue(
+                            mappingXml.getString("@target", null)),
                     PrincipalType.fromXmlValue(mappingXml.getString(
-                            "@principalType", PrincipalType.USER.getXmlValue()))));
+                            "@principalType",
+                            PrincipalType.USER.getXmlValue()))));
         }
         aclInheritance = new AclInheritanceMapping();
-        xml.ifXML("acl/inherit", x -> aclInheritance = new AclInheritanceMapping(
-                x.getString("@fromField", null),
-                AclInheritanceType.valueOf(x.getString(
-                        "@aclInheritanceType",
-                        AclInheritanceType.NOT_APPLICABLE.name()).toUpperCase())));
+        xml.ifXML("acl/inherit",
+                x -> aclInheritance = new AclInheritanceMapping(
+                        x.getString("@fromField", null),
+                        AclInheritanceType.valueOf(x.getString(
+                                "@aclInheritanceType",
+                                AclInheritanceType.NOT_APPLICABLE.name())
+                                .toUpperCase())));
     }
 
     @Override
@@ -1077,17 +1123,25 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         xml.addElement(CONFIG_CONNECTOR_NAME, connectorName);
         xml.addElement(CONFIG_SOURCE_ID_FIELD, sourceIdField);
         xml.addElement(CONFIG_KEEP_SOURCE_ID_FIELD, keepSourceIdField);
-        xml.addElement(CONFIG_TITLE_FIELD, titleField);
-        xml.addElement(CONFIG_OBJECT_TYPE_FIELD, objectTypeField);
-        xml.addElement(CONFIG_OBJECT_TYPE_DEFAULT_VALUE, objectTypeDefaultValue);
-        xml.addElement(CONFIG_UPDATE_TIME_FIELD, updateTimeField);
-        xml.addElement(CONFIG_CREATE_TIME_FIELD, createTimeField);
-        xml.addElement(CONFIG_CONTAINER_NAME_FIELD, containerNameField);
-        xml.addElement(CONFIG_CONTENT_LANGUAGE_FIELD, contentLanguageField);
-        xml.addElement(
-                CONFIG_CONTENT_LANGUAGE_DEFAULT_VALUE, contentLanguageDefaultValue);
-        xml.addElement(CONFIG_SOURCE_REPOSITORY_URL_FIELD, sourceRepositoryUrlField);
         xml.addElement(CONFIG_TYPED_STRUCTURED_DATA, typedStructuredData);
+
+        if (!metadataMappings.isEmpty()) {
+            XML metadataXml = xml.addElement(CONFIG_METADATA);
+            for (MetadataMapping mapping : metadataMappings) {
+                XML mappingXml = metadataXml.addElement("mapping")
+                        .setAttribute("toField", mapping.getToField())
+                        .setAttribute("keepFromField",
+                                mapping.isKeepFromField());
+                if (StringUtils.isNotBlank(mapping.getFromField())) {
+                    mappingXml.setAttribute("fromField",
+                            mapping.getFromField());
+                }
+                if (StringUtils.isNotBlank(mapping.getDefaultValue())) {
+                    mappingXml.setAttribute("defaultValue",
+                            mapping.getDefaultValue());
+                }
+            }
+        }
 
         if (!aclMappings.isEmpty()
                 || StringUtils.isNotBlank(aclInheritance.getFromField())) {
@@ -1095,20 +1149,26 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
             for (AclMapping aclMapping : aclMappings) {
                 aclXml.addElement("mapping")
                         .setAttribute("fromField", aclMapping.getFromField())
-                        .setAttribute("target", aclMapping.getTarget().getXmlValue())
-                        .setAttribute("principalType", aclMapping.getPrincipalType().getXmlValue());
+                        .setAttribute("target",
+                                aclMapping.getTarget().getXmlValue())
+                        .setAttribute("principalType",
+                                aclMapping.getPrincipalType().getXmlValue());
             }
             if (StringUtils.isNotBlank(aclInheritance.getFromField())) {
                 aclXml.addElement("inherit")
-                        .setAttribute("fromField", aclInheritance.getFromField())
-                        .setAttribute("aclInheritanceType", aclInheritance.getType());
+                        .setAttribute("fromField",
+                                aclInheritance.getFromField())
+                        .setAttribute("aclInheritanceType",
+                                aclInheritance.getType());
             }
         }
     }
 
     static class Helper {
-        CloudSearch createCloudSearch(String applicationName, String secretKeyPath,
-                String apiEndpoint) throws IOException, GeneralSecurityException {
+        CloudSearch createCloudSearch(String applicationName,
+                String secretKeyPath,
+                String apiEndpoint)
+                throws IOException, GeneralSecurityException {
             HttpRequestInitializer initializer = createRequestInitializer(secretKeyPath);
             CloudSearch.Builder builder = new CloudSearch.Builder(
                     createHttpTransport(), createJsonFactory(), initializer)
@@ -1199,6 +1259,71 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         }
     }
 
+    /**
+     * Maps crawler metadata fields to Google Cloud Search predefined
+     * metadata fields. Mapped source fields are excluded from structured
+     * data unless {@code keepFromField} is set to {@code true}.
+     *
+     * See Google reference:
+     * https://developers.google.com/workspace/cloud-search/docs/reference/rest/v1/ItemMetadata
+     */
+    public static class MetadataMapping {
+        private String fromField;
+        private String toField;
+        private String defaultValue;
+        private boolean keepFromField;
+
+        public MetadataMapping() {
+        }
+
+        MetadataMapping(
+                String fromField,
+                String toField,
+                String defaultValue,
+                boolean keepFromField) {
+            this.fromField = fromField;
+            this.toField = toField;
+            this.defaultValue = defaultValue;
+            this.keepFromField = keepFromField;
+        }
+
+        public String getFromField() {
+            return fromField;
+        }
+
+        public MetadataMapping setFromField(String fromField) {
+            this.fromField = fromField;
+            return this;
+        }
+
+        public String getToField() {
+            return toField;
+        }
+
+        public MetadataMapping setToField(String toField) {
+            this.toField = toField;
+            return this;
+        }
+
+        public String getDefaultValue() {
+            return defaultValue;
+        }
+
+        public MetadataMapping setDefaultValue(String defaultValue) {
+            this.defaultValue = defaultValue;
+            return this;
+        }
+
+        public boolean isKeepFromField() {
+            return keepFromField;
+        }
+
+        public MetadataMapping setKeepFromField(boolean keepFromField) {
+            this.keepFromField = keepFromField;
+            return this;
+        }
+    }
+
     public static class AclInheritanceMapping {
         private String fromField;
         private AclInheritanceType type = AclInheritanceType.NOT_APPLICABLE;
@@ -1235,7 +1360,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         private final List<String> failures = new ArrayList<>();
 
         @Override
-        public void onSuccess(Operation operation, HttpHeaders responseHeaders) {
+        public void onSuccess(Operation operation,
+                HttpHeaders responseHeaders) {
             // NOOP
         }
 

@@ -24,24 +24,32 @@
               minOccurs="0" maxOccurs="1" />
             <xs:element name="keepSourceIdField" type="xs:boolean"
               minOccurs="0" maxOccurs="1" />
-            <xs:element name="titleField" type="nonEmptyString"
-              minOccurs="0" maxOccurs="1" />
-            <xs:element name="objectTypeField" type="nonEmptyString"
-              minOccurs="0" maxOccurs="1" />
-            <xs:element name="objectTypeDefaultValue" type="nonEmptyString"
-              minOccurs="0" maxOccurs="1" />
-            <xs:element name="updateTimeField" type="nonEmptyString"
-              minOccurs="0" maxOccurs="1" />
-            <xs:element name="createTimeField" type="nonEmptyString"
-              minOccurs="0" maxOccurs="1" />
-            <xs:element name="containerNameField" type="nonEmptyString"
-              minOccurs="0" maxOccurs="1" />
-            <xs:element name="contentLanguageField" type="nonEmptyString"
-              minOccurs="0" maxOccurs="1" />
-            <xs:element name="contentLanguageDefaultValue" type="nonEmptyString"
-              minOccurs="0" maxOccurs="1" />
-            <xs:element name="sourceRepositoryUrlField" type="nonEmptyString"
-              minOccurs="0" maxOccurs="1" />
+            <xs:element name="metadata" minOccurs="0" maxOccurs="1">
+              <xs:annotation>
+                <xs:documentation>
+                  Optional metadata mapping section for Google predefined
+                  ItemMetadata fields.
+                </xs:documentation>
+              </xs:annotation>
+              <xs:complexType>
+                <xs:sequence>
+                  <xs:element name="mapping" minOccurs="0" maxOccurs="unbounded">
+                    <xs:annotation>
+                      <xs:documentation>
+                        Maps an optional crawler metadata field to one Google
+                        metadata field with optional default value.
+                      </xs:documentation>
+                    </xs:annotation>
+                    <xs:complexType>
+                      <xs:attribute name="fromField" type="nonEmptyString" use="optional" />
+                      <xs:attribute name="toField" type="metadataFieldValue" use="required" />
+                      <xs:attribute name="defaultValue" type="nonEmptyString" use="optional" />
+                      <xs:attribute name="keepFromField" type="xs:boolean" use="optional" />
+                    </xs:complexType>
+                  </xs:element>
+                </xs:sequence>
+              </xs:complexType>
+            </xs:element>
             <xs:element name="typedStructuredData" type="xs:boolean"
               minOccurs="0" maxOccurs="1" />
             <xs:element name="acl" minOccurs="0" maxOccurs="1">
@@ -120,6 +128,18 @@
       <xs:enumeration value="CHILD_OVERRIDE" />
       <xs:enumeration value="PARENT_OVERRIDE" />
       <xs:enumeration value="BOTH_PERMIT" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="metadataFieldValue">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="title" />
+      <xs:enumeration value="objectType" />
+      <xs:enumeration value="mimeType" />
+      <xs:enumeration value="updateTime" />
+      <xs:enumeration value="createTime" />
+      <xs:enumeration value="containerName" />
+      <xs:enumeration value="contentLanguage" />
+      <xs:enumeration value="sourceRepositoryUrl" />
     </xs:restriction>
   </xs:simpleType>
 </xs:schema>

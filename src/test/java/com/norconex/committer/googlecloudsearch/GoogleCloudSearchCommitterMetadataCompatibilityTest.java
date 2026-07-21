@@ -23,6 +23,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.Properties;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -39,12 +40,12 @@ import com.google.api.client.testing.http.MockLowLevelHttpResponse;
 import com.google.api.services.cloudsearch.v1.CloudSearch;
 import com.norconex.committer.core3.ICommitterRequest;
 import com.norconex.committer.core3.UpsertRequest;
-import com.norconex.commons.lang.map.Properties;
 import com.norconex.commons.lang.xml.XML;
 
 class GoogleCloudSearchCommitterMetadataCompatibilityTest {
 
-    private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
+    private static final JsonFactory JSON_FACTORY =
+            GsonFactory.getDefaultInstance();
     private static final String REFERENCE = "https://example.com/item";
 
     @TempDir
@@ -57,16 +58,22 @@ class GoogleCloudSearchCommitterMetadataCompatibilityTest {
         transport.enqueue(jsonResponse(successfulBatchResponseHeader(),
                 successfulBatchResponseBody("operations/index-1")));
 
-        try (GoogleCloudSearchCommitter subject = new GoogleCloudSearchCommitter(
-                new TestHelper(transport, 1000L))) {
-            XML xml = minimalXml(new File(tempDir, "placeholder.json").getAbsolutePath());
+        try (GoogleCloudSearchCommitter subject =
+                new GoogleCloudSearchCommitter(
+                        new TestHelper(transport, 1000L))) {
+            XML xml = minimalXml(
+                    new File(tempDir, "placeholder.json").getAbsolutePath());
             xml.addElement("uploadFormat", "text");
-            xml.addElement("sourceRepositoryUrlField", "source_url");
+            xml.addElement("metadata")
+                    .addElement("mapping")
+                    .setAttribute("fromField", "source_url")
+                    .setAttribute("toField", "sourceRepositoryUrl");
             subject.loadBatchCommitterFromXML(xml);
             subject.initBatchCommitter();
 
             Properties metadata = new Properties();
-            metadata.set(GoogleCloudSearchCommitter.FIELD_CONTENT_TYPE, "text/plain");
+            metadata.set(GoogleCloudSearchCommitter.FIELD_CONTENT_TYPE,
+                    "text/plain");
 
             List<ICommitterRequest> requests = new ArrayList<>();
             requests.add(new UpsertRequest(
@@ -76,8 +83,10 @@ class GoogleCloudSearchCommitterMetadataCompatibilityTest {
 
             subject.commitBatch(requests.iterator());
 
-            String batchBody = transport.getRequests().get(0).getContentAsString();
-            assertThat(batchBody).contains("\"sourceRepositoryUrl\":\"" + REFERENCE + "\"");
+            String batchBody =
+                    transport.getRequests().get(0).getContentAsString();
+            assertThat(batchBody)
+                    .contains("\"sourceRepositoryUrl\":\"" + REFERENCE + "\"");
         }
     }
 
@@ -88,18 +97,28 @@ class GoogleCloudSearchCommitterMetadataCompatibilityTest {
         transport.enqueue(jsonResponse(successfulBatchResponseHeader(),
                 successfulBatchResponseBody("operations/index-1")));
 
-        try (GoogleCloudSearchCommitter subject = new GoogleCloudSearchCommitter(
-                new TestHelper(transport, 1000L))) {
-            XML xml = minimalXml(new File(tempDir, "placeholder.json").getAbsolutePath());
+        try (GoogleCloudSearchCommitter subject =
+                new GoogleCloudSearchCommitter(
+                        new TestHelper(transport, 1000L))) {
+            XML xml = minimalXml(
+                    new File(tempDir, "placeholder.json").getAbsolutePath());
             xml.addElement("uploadFormat", "text");
-            xml.addElement("objectTypeDefaultValue", "webpage");
-            xml.addElement("contentLanguageDefaultValue", "en-US");
-            xml.addElement("createTimeField", "created");
+            XML metadataXml = xml.addElement("metadata");
+            metadataXml.addElement("mapping")
+                    .setAttribute("toField", "objectType")
+                    .setAttribute("defaultValue", "webpage");
+            metadataXml.addElement("mapping")
+                    .setAttribute("toField", "contentLanguage")
+                    .setAttribute("defaultValue", "en-US");
+            metadataXml.addElement("mapping")
+                    .setAttribute("fromField", "created")
+                    .setAttribute("toField", "createTime");
             subject.loadBatchCommitterFromXML(xml);
             subject.initBatchCommitter();
 
             Properties metadata = new Properties();
-            metadata.set(GoogleCloudSearchCommitter.FIELD_CONTENT_TYPE, "text/plain");
+            metadata.set(GoogleCloudSearchCommitter.FIELD_CONTENT_TYPE,
+                    "text/plain");
             metadata.set("created", "2026-07-14T12:30:00Z");
 
             List<ICommitterRequest> requests = new ArrayList<>();
@@ -110,10 +129,12 @@ class GoogleCloudSearchCommitterMetadataCompatibilityTest {
 
             subject.commitBatch(requests.iterator());
 
-            String batchBody = transport.getRequests().get(0).getContentAsString();
+            String batchBody =
+                    transport.getRequests().get(0).getContentAsString();
             assertThat(batchBody).contains("\"objectType\":\"webpage\"");
             assertThat(batchBody).contains("\"contentLanguage\":\"en-US\"");
-            assertThat(batchBody).contains("\"createTime\":\"2026-07-14T12:30:00Z\"");
+            assertThat(batchBody)
+                    .contains("\"createTime\":\"2026-07-14T12:30:00Z\"");
         }
     }
 
@@ -124,16 +145,19 @@ class GoogleCloudSearchCommitterMetadataCompatibilityTest {
         transport.enqueue(jsonResponse(successfulBatchResponseHeader(),
                 successfulBatchResponseBody("operations/index-1")));
 
-        try (GoogleCloudSearchCommitter subject = new GoogleCloudSearchCommitter(
-                new TestHelper(transport, 1000L))) {
-            XML xml = minimalXml(new File(tempDir, "placeholder.json").getAbsolutePath());
+        try (GoogleCloudSearchCommitter subject =
+                new GoogleCloudSearchCommitter(
+                        new TestHelper(transport, 1000L))) {
+            XML xml = minimalXml(
+                    new File(tempDir, "placeholder.json").getAbsolutePath());
             xml.addElement("uploadFormat", "text");
             xml.addElement("typedStructuredData", true);
             subject.loadBatchCommitterFromXML(xml);
             subject.initBatchCommitter();
 
             Properties metadata = new Properties();
-            metadata.set(GoogleCloudSearchCommitter.FIELD_CONTENT_TYPE, "text/plain");
+            metadata.set(GoogleCloudSearchCommitter.FIELD_CONTENT_TYPE,
+                    "text/plain");
             metadata.set("isPublished", "true");
             metadata.set("count", "123");
             metadata.set("ratio", "1.5");
@@ -148,12 +172,18 @@ class GoogleCloudSearchCommitterMetadataCompatibilityTest {
 
             subject.commitBatch(requests.iterator());
 
-            String batchBody = transport.getRequests().get(0).getContentAsString();
-            assertThat(batchBody).contains("\"textValues\":{\"values\":[\"true\"]}");
-            assertThat(batchBody).contains("\"integerValues\":{\"values\":[\"123\"]}");
-            assertThat(batchBody).contains("\"doubleValues\":{\"values\":[1.5]}");
-            assertThat(batchBody).contains("\"timestampValues\":{\"values\":[\"2026-07-14T12:30:00Z\"]}");
-            assertThat(batchBody).contains("\"dateValues\":{\"values\":[{\"day\":14,\"month\":7,\"year\":2026}]}");
+            String batchBody =
+                    transport.getRequests().get(0).getContentAsString();
+            assertThat(batchBody)
+                    .contains("\"textValues\":{\"values\":[\"true\"]}");
+            assertThat(batchBody)
+                    .contains("\"integerValues\":{\"values\":[\"123\"]}");
+            assertThat(batchBody)
+                    .contains("\"doubleValues\":{\"values\":[1.5]}");
+            assertThat(batchBody).contains(
+                    "\"timestampValues\":{\"values\":[\"2026-07-14T12:30:00Z\"]}");
+            assertThat(batchBody).contains(
+                    "\"dateValues\":{\"values\":[{\"day\":14,\"month\":7,\"year\":2026}]}");
         }
     }
 
@@ -195,7 +225,8 @@ class GoogleCloudSearchCommitterMetadataCompatibilityTest {
         };
     }
 
-    private static final class TestHelper extends GoogleCloudSearchCommitter.Helper {
+    private static final class TestHelper
+            extends GoogleCloudSearchCommitter.Helper {
         private final HttpTransport transport;
         private final long currentTimeMillis;
 
@@ -205,15 +236,16 @@ class GoogleCloudSearchCommitterMetadataCompatibilityTest {
         }
 
         @Override
-        CloudSearch createCloudSearch(String applicationName, String secretKeyPath,
+        CloudSearch createCloudSearch(String applicationName,
+                String secretKeyPath,
                 String apiEndpoint) {
             return new CloudSearch.Builder(
                     transport,
                     JSON_FACTORY,
                     noOpInitializer())
-                    .setApplicationName(applicationName)
-                    .setRootUrl(apiEndpoint)
-                    .build();
+                            .setApplicationName(applicationName)
+                            .setRootUrl(apiEndpoint)
+                            .build();
         }
 
         @Override
@@ -223,8 +255,10 @@ class GoogleCloudSearchCommitterMetadataCompatibilityTest {
     }
 
     private static final class RecordingTransport extends MockHttpTransport {
-        private final Deque<MockLowLevelHttpResponse> responses = new java.util.ArrayDeque<>();
-        private final List<MockLowLevelHttpRequest> requests = new ArrayList<>();
+        private final Deque<MockLowLevelHttpResponse> responses =
+                new java.util.ArrayDeque<>();
+        private final List<MockLowLevelHttpRequest> requests =
+                new ArrayList<>();
         private final List<String> urls = new ArrayList<>();
 
         private void enqueue(MockLowLevelHttpResponse response) {
@@ -246,7 +280,8 @@ class GoogleCloudSearchCommitterMetadataCompatibilityTest {
                 public LowLevelHttpResponse execute() {
                     if (responses.isEmpty()) {
                         throw new IllegalStateException(
-                                "No response enqueued for request to " + getUrl());
+                                "No response enqueued for request to "
+                                        + getUrl());
                     }
                     return responses.removeFirst();
                 }

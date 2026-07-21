@@ -28,7 +28,8 @@ class GoogleCloudSearchCommitterConfigTest {
 
         @Test
         void allPropertiesRoundtripThroughXml() throws Exception {
-                GoogleCloudSearchCommitter committer = new GoogleCloudSearchCommitter();
+                GoogleCloudSearchCommitter committer =
+                                new GoogleCloudSearchCommitter();
 
                 // Set all simple config properties
                 committer.setSecretKeyPath("/path/to/service-account.json");
@@ -38,46 +39,75 @@ class GoogleCloudSearchCommitterConfigTest {
                 committer.setConnectorName("my-connector");
                 committer.setSourceIdField("unique_id");
                 committer.setKeepSourceIdField(true);
-                committer.setTitleField("document_title");
-                committer.setObjectTypeField("doc_type");
-                committer.setObjectTypeDefaultValue("webpage");
-                committer.setUpdateTimeField("last_updated");
-                committer.setCreateTimeField("first_seen");
-                committer.setContainerNameField("collection_name");
-                committer.setContentLanguageField("language");
-                committer.setContentLanguageDefaultValue("en-US");
-                committer.setSourceRepositoryUrlField("source_url");
+                committer.setMetadataMappings(List.of(
+                                new GoogleCloudSearchCommitter.MetadataMapping()
+                                                .setFromField("document_title")
+                                                .setToField("title"),
+                                new GoogleCloudSearchCommitter.MetadataMapping()
+                                                .setFromField("doc_type")
+                                                .setToField("objectType")
+                                                .setDefaultValue("webpage"),
+                                new GoogleCloudSearchCommitter.MetadataMapping()
+                                                .setFromField("last_updated")
+                                                .setToField("updateTime"),
+                                new GoogleCloudSearchCommitter.MetadataMapping()
+                                                .setFromField("first_seen")
+                                                .setToField("createTime"),
+                                new GoogleCloudSearchCommitter.MetadataMapping()
+                                                .setFromField("collection_name")
+                                                .setToField("containerName"),
+                                new GoogleCloudSearchCommitter.MetadataMapping()
+                                                .setFromField("language")
+                                                .setToField("contentLanguage")
+                                                .setDefaultValue("en-US"),
+                                new GoogleCloudSearchCommitter.MetadataMapping()
+                                                .setFromField("source_url")
+                                                .setToField("sourceRepositoryUrl")
+                                                .setKeepFromField(true)));
                 committer.setTypedStructuredData(true);
-                committer.setUploadFormat(GoogleCloudSearchCommitter.UploadFormat.TEXT);
-                committer.setRequestMode(GoogleCloudSearchCommitter.RequestMode.SYNCHRONOUS);
+                committer.setUploadFormat(
+                                GoogleCloudSearchCommitter.UploadFormat.TEXT);
+                committer.setRequestMode(
+                                GoogleCloudSearchCommitter.RequestMode.SYNCHRONOUS);
 
                 // Set ACL mappings
-                List<GoogleCloudSearchCommitter.AclMapping> mappings = new ArrayList<>();
+                List<GoogleCloudSearchCommitter.AclMapping> mappings =
+                                new ArrayList<>();
 
-                GoogleCloudSearchCommitter.AclMapping mapping1 = new GoogleCloudSearchCommitter.AclMapping();
+                GoogleCloudSearchCommitter.AclMapping mapping1 =
+                                new GoogleCloudSearchCommitter.AclMapping();
                 mapping1.setFromField("acl.readers");
-                mapping1.setTarget(GoogleCloudSearchCommitter.AclTarget.READERS);
-                mapping1.setPrincipalType(GoogleCloudSearchCommitter.PrincipalType.GROUP);
+                mapping1.setTarget(
+                                GoogleCloudSearchCommitter.AclTarget.READERS);
+                mapping1.setPrincipalType(
+                                GoogleCloudSearchCommitter.PrincipalType.GROUP);
                 mappings.add(mapping1);
 
-                GoogleCloudSearchCommitter.AclMapping mapping2 = new GoogleCloudSearchCommitter.AclMapping();
+                GoogleCloudSearchCommitter.AclMapping mapping2 =
+                                new GoogleCloudSearchCommitter.AclMapping();
                 mapping2.setFromField("acl.denied");
-                mapping2.setTarget(GoogleCloudSearchCommitter.AclTarget.DENIED_READERS);
-                mapping2.setPrincipalType(GoogleCloudSearchCommitter.PrincipalType.USER);
+                mapping2.setTarget(
+                                GoogleCloudSearchCommitter.AclTarget.DENIED_READERS);
+                mapping2.setPrincipalType(
+                                GoogleCloudSearchCommitter.PrincipalType.USER);
                 mappings.add(mapping2);
 
-                GoogleCloudSearchCommitter.AclMapping mapping3 = new GoogleCloudSearchCommitter.AclMapping();
+                GoogleCloudSearchCommitter.AclMapping mapping3 =
+                                new GoogleCloudSearchCommitter.AclMapping();
                 mapping3.setFromField("acl.owners");
                 mapping3.setTarget(GoogleCloudSearchCommitter.AclTarget.OWNERS);
-                mapping3.setPrincipalType(GoogleCloudSearchCommitter.PrincipalType.USER);
+                mapping3.setPrincipalType(
+                                GoogleCloudSearchCommitter.PrincipalType.USER);
                 mappings.add(mapping3);
 
                 committer.setAclMappings(mappings);
 
                 // Set ACL inheritance
-                GoogleCloudSearchCommitter.AclInheritanceMapping inheritance = new GoogleCloudSearchCommitter.AclInheritanceMapping();
+                GoogleCloudSearchCommitter.AclInheritanceMapping inheritance =
+                                new GoogleCloudSearchCommitter.AclInheritanceMapping();
                 inheritance.setFromField("parent_reference");
-                inheritance.setType(GoogleCloudSearchCommitter.AclInheritanceType.CHILD_OVERRIDE);
+                inheritance.setType(
+                                GoogleCloudSearchCommitter.AclInheritanceType.CHILD_OVERRIDE);
                 committer.setAclInheritance(inheritance);
 
                 // Save to XML
@@ -85,26 +115,41 @@ class GoogleCloudSearchCommitterConfigTest {
                 committer.saveBatchCommitterToXML(savedXml);
 
                 // Load from XML into a new committer
-                GoogleCloudSearchCommitter loaded = new GoogleCloudSearchCommitter();
+                GoogleCloudSearchCommitter loaded =
+                                new GoogleCloudSearchCommitter();
                 loaded.loadBatchCommitterFromXML(savedXml);
 
                 // Verify all simple properties
-                assertThat(loaded.getSecretKeyPath()).isEqualTo("/path/to/service-account.json");
-                assertThat(loaded.getDataSourceId()).isEqualTo("test-datasource-123");
-                assertThat(loaded.getApiEndpoint()).isEqualTo("https://custom-api.example.com/");
-                assertThat(loaded.getApplicationName()).isEqualTo("My Custom Application");
+                assertThat(loaded.getSecretKeyPath())
+                                .isEqualTo("/path/to/service-account.json");
+                assertThat(loaded.getDataSourceId())
+                                .isEqualTo("test-datasource-123");
+                assertThat(loaded.getApiEndpoint())
+                                .isEqualTo("https://custom-api.example.com/");
+                assertThat(loaded.getApplicationName())
+                                .isEqualTo("My Custom Application");
                 assertThat(loaded.getConnectorName()).isEqualTo("my-connector");
                 assertThat(loaded.getSourceIdField()).isEqualTo("unique_id");
                 assertThat(loaded.isKeepSourceIdField()).isTrue();
-                assertThat(loaded.getTitleField()).isEqualTo("document_title");
-                assertThat(loaded.getObjectTypeField()).isEqualTo("doc_type");
-                assertThat(loaded.getObjectTypeDefaultValue()).isEqualTo("webpage");
-                assertThat(loaded.getUpdateTimeField()).isEqualTo("last_updated");
-                assertThat(loaded.getCreateTimeField()).isEqualTo("first_seen");
-                assertThat(loaded.getContainerNameField()).isEqualTo("collection_name");
-                assertThat(loaded.getContentLanguageField()).isEqualTo("language");
-                assertThat(loaded.getContentLanguageDefaultValue()).isEqualTo("en-US");
-                assertThat(loaded.getSourceRepositoryUrlField()).isEqualTo("source_url");
+                assertThat(loaded.getMetadataMappings()).hasSize(7);
+                assertThat(loaded.getMetadataMappings().get(0).getFromField())
+                                .isEqualTo("document_title");
+                assertThat(loaded.getMetadataMappings().get(0).getToField())
+                                .isEqualTo("title");
+                assertThat(loaded.getMetadataMappings().get(1).getFromField())
+                                .isEqualTo("doc_type");
+                assertThat(loaded.getMetadataMappings().get(1).getToField())
+                                .isEqualTo("objectType");
+                assertThat(loaded.getMetadataMappings().get(1)
+                                .getDefaultValue()).isEqualTo("webpage");
+                assertThat(loaded.getMetadataMappings().get(5).getFromField())
+                                .isEqualTo("language");
+                assertThat(loaded.getMetadataMappings().get(5)
+                                .getDefaultValue()).isEqualTo("en-US");
+                assertThat(loaded.getMetadataMappings().get(6).getFromField())
+                                .isEqualTo("source_url");
+                assertThat(loaded.getMetadataMappings().get(6)
+                                .isKeepFromField()).isTrue();
                 assertThat(loaded.isTypedStructuredData()).isTrue();
                 assertThat(loaded.getUploadFormat())
                                 .isEqualTo(GoogleCloudSearchCommitter.UploadFormat.TEXT);
@@ -113,26 +158,30 @@ class GoogleCloudSearchCommitterConfigTest {
 
                 // Verify ACL mappings
                 assertThat(loaded.getAclMappings()).hasSize(3);
-                assertThat(loaded.getAclMappings().get(0).getFromField()).isEqualTo("acl.readers");
+                assertThat(loaded.getAclMappings().get(0).getFromField())
+                                .isEqualTo("acl.readers");
                 assertThat(loaded.getAclMappings().get(0).getTarget())
                                 .isEqualTo(GoogleCloudSearchCommitter.AclTarget.READERS);
                 assertThat(loaded.getAclMappings().get(0).getPrincipalType())
                                 .isEqualTo(GoogleCloudSearchCommitter.PrincipalType.GROUP);
 
-                assertThat(loaded.getAclMappings().get(1).getFromField()).isEqualTo("acl.denied");
+                assertThat(loaded.getAclMappings().get(1).getFromField())
+                                .isEqualTo("acl.denied");
                 assertThat(loaded.getAclMappings().get(1).getTarget())
                                 .isEqualTo(GoogleCloudSearchCommitter.AclTarget.DENIED_READERS);
                 assertThat(loaded.getAclMappings().get(1).getPrincipalType())
                                 .isEqualTo(GoogleCloudSearchCommitter.PrincipalType.USER);
 
-                assertThat(loaded.getAclMappings().get(2).getFromField()).isEqualTo("acl.owners");
+                assertThat(loaded.getAclMappings().get(2).getFromField())
+                                .isEqualTo("acl.owners");
                 assertThat(loaded.getAclMappings().get(2).getTarget())
                                 .isEqualTo(GoogleCloudSearchCommitter.AclTarget.OWNERS);
                 assertThat(loaded.getAclMappings().get(2).getPrincipalType())
                                 .isEqualTo(GoogleCloudSearchCommitter.PrincipalType.USER);
 
                 // Verify ACL inheritance
-                assertThat(loaded.getAclInheritance().getFromField()).isEqualTo("parent_reference");
+                assertThat(loaded.getAclInheritance().getFromField())
+                                .isEqualTo("parent_reference");
                 assertThat(loaded.getAclInheritance().getType())
                                 .isEqualTo(GoogleCloudSearchCommitter.AclInheritanceType.CHILD_OVERRIDE);
         }
