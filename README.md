@@ -130,7 +130,8 @@ Search ACL fields.
 - ACL fields used by `mapping` and `inherit` are excluded from structured data.
 - Blank ACL values are ignored.
 - If no ACL mapping produces any principals and no inheritance is configured,
-  no ACL block is sent for the item.
+  the committer defaults to a customer-domain reader principal so the item
+  remains accessible and satisfies Cloud Search ACL requirements.
 
 ## Content Upload Behavior
 
