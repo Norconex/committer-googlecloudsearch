@@ -22,7 +22,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.http.HttpHeaders;
-import java.rmi.server.Operation;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -74,6 +73,7 @@ import com.google.api.services.cloudsearch.v1.model.ItemContent;
 import com.google.api.services.cloudsearch.v1.model.ItemMetadata;
 import com.google.api.services.cloudsearch.v1.model.ItemStructuredData;
 import com.google.api.services.cloudsearch.v1.model.NamedProperty;
+import com.google.api.services.cloudsearch.v1.model.Operation;
 import com.google.api.services.cloudsearch.v1.model.StartUploadItemRequest;
 import com.google.api.services.cloudsearch.v1.model.StructuredDataObject;
 import com.google.api.services.cloudsearch.v1.model.TextValues;
@@ -115,14 +115,35 @@ import com.norconex.commons.lang.xml.XML;
  *
  * {@nx.include com.norconex.committer.core3.AbstractCommitter#fieldMappings}
  *
+ * <p>
+ * Complete configuration example showing all Google Cloud Search-specific
+ * options supported by this committer:
+ * </p>
+ *
  * {@nx.xml.usage
- * <committer class=
- * "com.norconex.committer.googlecloudsearch.GoogleCloudSearchCommitter">
+ * <committer
+ * class="com.norconex.committer.googlecloudsearch.GoogleCloudSearchCommitter">
  * <secretKeyPath>/path/to/google-service-account.json</secretKeyPath>
  * <dataSourceId>your-datasource-id</dataSourceId>
+ * <applicationName>Norconex GCS Connector</applicationName>
+ * <connectorName>norconex-gcs-connector</connectorName>
  * <uploadFormat>raw</uploadFormat>
  * <requestMode>asynchronous</requestMode>
+ * <sourceIdField>document.reference</sourceIdField>
+ * <keepSourceIdField>false</keepSourceIdField>
+ * <typedStructuredData>true</typedStructuredData>
  * <apiEndpoint>http://localhost:8080/</apiEndpoint>
+ *
+ * <metadata>
+ * <mapping fromField="title" toField="title"/>
+ * <mapping fromField="objectType" toField="objectType"
+ * defaultValue="document"/>
+ * <mapping fromField="Last-Modified" toField="updateTime"/>
+ * <mapping fromField="collection" toField="containerName"/>
+ * <mapping fromField="language" toField="contentLanguage"/>
+ * <mapping fromField="origin.url" toField="sourceRepositoryUrl"
+ * keepFromField="true"/>
+ * </metadata>
  *
  * <acl>
  * <mapping fromField="acl.reader.user" target="readers" principalType="user"/>
@@ -134,6 +155,29 @@ import com.norconex.commons.lang.xml.XML;
  *
  * {@nx.include
  * com.norconex.committer.core3.batch.AbstractBatchCommitter#options}
+ * </committer>
+ * }
+ *
+ * <p>
+ * Typical setup example for most crawling projects:
+ * </p>
+ *
+ * {@nx.xml.example
+ * <committer
+ * class="com.norconex.committer.googlecloudsearch.GoogleCloudSearchCommitter">
+ * <secretKeyPath>/secrets/gcs-service-account.json</secretKeyPath>
+ * <dataSourceId>my-datasource</dataSourceId>
+ * <connectorName>website-crawler</connectorName>
+ * <uploadFormat>text</uploadFormat>
+ *
+ * <metadata>
+ * <mapping fromField="title" toField="title"/>
+ * <mapping fromField="Last-Modified" toField="updateTime"/>
+ * </metadata>
+ *
+ * <acl>
+ * <mapping fromField="acl.reader.group" target="readers" principalType="group"/>
+ * </acl>
  * </committer>
  * }
  */
@@ -241,7 +285,6 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
 
     /**
      * Supported Google Cloud Search item metadata targets.
-     *
      * See Google reference:
      * https://developers.google.com/workspace/cloud-search/docs/reference/rest/v1/ItemMetadata
      */
@@ -255,10 +298,10 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         CONTENT_LANGUAGE("contentLanguage"),
         SOURCE_REPOSITORY_URL("sourceRepositoryUrl");
 
-        private final String xmlValue;
+        private final String fieldName;
 
-        MetadataField(String xmlValue) {
-            this.xmlValue = xmlValue;
+        MetadataField(String fieldName) {
+            this.fieldName = fieldName;
         }
 
         static MetadataField fromXmlValue(String value) {
@@ -266,15 +309,16 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
                 return null;
             }
             for (MetadataField field : values()) {
-                if (field.xmlValue.equalsIgnoreCase(value)) {
+                if (field.fieldName.equalsIgnoreCase(value)) {
                     return field;
                 }
             }
             return null;
         }
 
-        String getXmlValue() {
-            return xmlValue;
+        @Override
+        public String toString() {
+            return fieldName;
         }
     }
 
@@ -634,11 +678,10 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
 
     private MetadataMapping findMetadataMapping(MetadataField targetField) {
         for (MetadataMapping mapping : metadataMappings) {
-            if (mapping == null || StringUtils.isBlank(mapping.getToField())) {
+            if (mapping == null || mapping.getToField() == null) {
                 continue;
             }
-            MetadataField field = MetadataField.fromXmlValue(mapping.getToField());
-            if (field == targetField) {
+            if (mapping.getToField() == targetField) {
                 return mapping;
             }
         }
@@ -1049,14 +1092,9 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
             connectorName = applicationName;
         }
         for (MetadataMapping mapping : metadataMappings) {
-            if (mapping == null || StringUtils.isBlank(mapping.getToField())) {
+            if (mapping == null || mapping.getToField() == null) {
                 throw new CommitterException(
                         "Each metadata mapping must declare a non-blank toField.");
-            }
-            if (MetadataField.fromXmlValue(mapping.getToField()) == null) {
-                throw new CommitterException(
-                        "Unsupported metadata mapping toField: "
-                                + mapping.getToField());
             }
         }
     }
@@ -1087,7 +1125,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         for (XML mappingXml : xml.getXMLList(CONFIG_METADATA + "/mapping")) {
             metadataMappings.add(new MetadataMapping(
                     mappingXml.getString("@fromField", null),
-                    mappingXml.getString("@toField", null),
+                    MetadataField.fromXmlValue(
+                            mappingXml.getString("@toField", null)),
                     mappingXml.getString("@defaultValue", null),
                     mappingXml.getBoolean("@keepFromField", false)));
         }
@@ -1269,7 +1308,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
      */
     public static class MetadataMapping {
         private String fromField;
-        private String toField;
+        private MetadataField toField;
         private String defaultValue;
         private boolean keepFromField;
 
@@ -1278,7 +1317,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
 
         MetadataMapping(
                 String fromField,
-                String toField,
+                MetadataField toField,
                 String defaultValue,
                 boolean keepFromField) {
             this.fromField = fromField;
@@ -1296,11 +1335,11 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
             return this;
         }
 
-        public String getToField() {
+        public MetadataField getToField() {
             return toField;
         }
 
-        public MetadataMapping setToField(String toField) {
+        public MetadataMapping setToField(MetadataField toField) {
             this.toField = toField;
             return this;
         }

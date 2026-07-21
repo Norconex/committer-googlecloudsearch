@@ -28,8 +28,7 @@ class GoogleCloudSearchCommitterConfigTest {
 
         @Test
         void allPropertiesRoundtripThroughXml() throws Exception {
-                GoogleCloudSearchCommitter committer =
-                                new GoogleCloudSearchCommitter();
+                GoogleCloudSearchCommitter committer = new GoogleCloudSearchCommitter();
 
                 // Set all simple config properties
                 committer.setSecretKeyPath("/path/to/service-account.json");
@@ -42,27 +41,27 @@ class GoogleCloudSearchCommitterConfigTest {
                 committer.setMetadataMappings(List.of(
                                 new GoogleCloudSearchCommitter.MetadataMapping()
                                                 .setFromField("document_title")
-                                                .setToField("title"),
+                                                .setToField(GoogleCloudSearchCommitter.MetadataField.TITLE),
                                 new GoogleCloudSearchCommitter.MetadataMapping()
                                                 .setFromField("doc_type")
-                                                .setToField("objectType")
+                                                .setToField(GoogleCloudSearchCommitter.MetadataField.OBJECT_TYPE)
                                                 .setDefaultValue("webpage"),
                                 new GoogleCloudSearchCommitter.MetadataMapping()
                                                 .setFromField("last_updated")
-                                                .setToField("updateTime"),
+                                                .setToField(GoogleCloudSearchCommitter.MetadataField.UPDATE_TIME),
                                 new GoogleCloudSearchCommitter.MetadataMapping()
                                                 .setFromField("first_seen")
-                                                .setToField("createTime"),
+                                                .setToField(GoogleCloudSearchCommitter.MetadataField.CREATE_TIME),
                                 new GoogleCloudSearchCommitter.MetadataMapping()
                                                 .setFromField("collection_name")
-                                                .setToField("containerName"),
+                                                .setToField(GoogleCloudSearchCommitter.MetadataField.CONTAINER_NAME),
                                 new GoogleCloudSearchCommitter.MetadataMapping()
                                                 .setFromField("language")
-                                                .setToField("contentLanguage")
+                                                .setToField(GoogleCloudSearchCommitter.MetadataField.CONTENT_LANGUAGE)
                                                 .setDefaultValue("en-US"),
                                 new GoogleCloudSearchCommitter.MetadataMapping()
                                                 .setFromField("source_url")
-                                                .setToField("sourceRepositoryUrl")
+                                                .setToField(GoogleCloudSearchCommitter.MetadataField.SOURCE_REPOSITORY_URL)
                                                 .setKeepFromField(true)));
                 committer.setTypedStructuredData(true);
                 committer.setUploadFormat(
@@ -71,11 +70,9 @@ class GoogleCloudSearchCommitterConfigTest {
                                 GoogleCloudSearchCommitter.RequestMode.SYNCHRONOUS);
 
                 // Set ACL mappings
-                List<GoogleCloudSearchCommitter.AclMapping> mappings =
-                                new ArrayList<>();
+                List<GoogleCloudSearchCommitter.AclMapping> mappings = new ArrayList<>();
 
-                GoogleCloudSearchCommitter.AclMapping mapping1 =
-                                new GoogleCloudSearchCommitter.AclMapping();
+                GoogleCloudSearchCommitter.AclMapping mapping1 = new GoogleCloudSearchCommitter.AclMapping();
                 mapping1.setFromField("acl.readers");
                 mapping1.setTarget(
                                 GoogleCloudSearchCommitter.AclTarget.READERS);
@@ -83,8 +80,7 @@ class GoogleCloudSearchCommitterConfigTest {
                                 GoogleCloudSearchCommitter.PrincipalType.GROUP);
                 mappings.add(mapping1);
 
-                GoogleCloudSearchCommitter.AclMapping mapping2 =
-                                new GoogleCloudSearchCommitter.AclMapping();
+                GoogleCloudSearchCommitter.AclMapping mapping2 = new GoogleCloudSearchCommitter.AclMapping();
                 mapping2.setFromField("acl.denied");
                 mapping2.setTarget(
                                 GoogleCloudSearchCommitter.AclTarget.DENIED_READERS);
@@ -92,8 +88,7 @@ class GoogleCloudSearchCommitterConfigTest {
                                 GoogleCloudSearchCommitter.PrincipalType.USER);
                 mappings.add(mapping2);
 
-                GoogleCloudSearchCommitter.AclMapping mapping3 =
-                                new GoogleCloudSearchCommitter.AclMapping();
+                GoogleCloudSearchCommitter.AclMapping mapping3 = new GoogleCloudSearchCommitter.AclMapping();
                 mapping3.setFromField("acl.owners");
                 mapping3.setTarget(GoogleCloudSearchCommitter.AclTarget.OWNERS);
                 mapping3.setPrincipalType(
@@ -103,8 +98,7 @@ class GoogleCloudSearchCommitterConfigTest {
                 committer.setAclMappings(mappings);
 
                 // Set ACL inheritance
-                GoogleCloudSearchCommitter.AclInheritanceMapping inheritance =
-                                new GoogleCloudSearchCommitter.AclInheritanceMapping();
+                GoogleCloudSearchCommitter.AclInheritanceMapping inheritance = new GoogleCloudSearchCommitter.AclInheritanceMapping();
                 inheritance.setFromField("parent_reference");
                 inheritance.setType(
                                 GoogleCloudSearchCommitter.AclInheritanceType.CHILD_OVERRIDE);
@@ -115,8 +109,7 @@ class GoogleCloudSearchCommitterConfigTest {
                 committer.saveBatchCommitterToXML(savedXml);
 
                 // Load from XML into a new committer
-                GoogleCloudSearchCommitter loaded =
-                                new GoogleCloudSearchCommitter();
+                GoogleCloudSearchCommitter loaded = new GoogleCloudSearchCommitter();
                 loaded.loadBatchCommitterFromXML(savedXml);
 
                 // Verify all simple properties
@@ -135,11 +128,11 @@ class GoogleCloudSearchCommitterConfigTest {
                 assertThat(loaded.getMetadataMappings().get(0).getFromField())
                                 .isEqualTo("document_title");
                 assertThat(loaded.getMetadataMappings().get(0).getToField())
-                                .isEqualTo("title");
+                                .isEqualTo(GoogleCloudSearchCommitter.MetadataField.TITLE);
                 assertThat(loaded.getMetadataMappings().get(1).getFromField())
                                 .isEqualTo("doc_type");
                 assertThat(loaded.getMetadataMappings().get(1).getToField())
-                                .isEqualTo("objectType");
+                                .isEqualTo(GoogleCloudSearchCommitter.MetadataField.OBJECT_TYPE);
                 assertThat(loaded.getMetadataMappings().get(1)
                                 .getDefaultValue()).isEqualTo("webpage");
                 assertThat(loaded.getMetadataMappings().get(5).getFromField())
