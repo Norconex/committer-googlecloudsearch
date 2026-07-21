@@ -17,14 +17,33 @@ package com.norconex.committer.googlecloudsearch;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.IOException;
+import java.io.Reader;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import com.norconex.commons.lang.ResourceLoader;
 import com.norconex.commons.lang.xml.XML;
 
 class GoogleCloudSearchCommitterConfigTest {
+
+        @Test
+        void testValidation() throws IOException {
+                // Exercises the bundled XSD, catching drift between it and
+                // the committer's actual config surface (e.g., a field
+                // renamed/added/removed in code but not in the schema).
+                Assertions.assertDoesNotThrow(() -> {
+                        try (Reader r = ResourceLoader.getXmlReader(
+                                        this.getClass())) {
+                                XML xml = XML.of(r).create();
+                                xml.toObjectImpl(
+                                                GoogleCloudSearchCommitter.class);
+                        }
+                });
+        }
 
         @Test
         void allPropertiesRoundtripThroughXml() throws Exception {

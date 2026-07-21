@@ -193,24 +193,64 @@ more specific Google-native type, declare it explicitly in `structuredData`:
 ```
 
 `mapping` attributes: `field` (required, the metadata/structured-data field
-name) and `type` (optional, defaults to `text`). Supported `type` values are
-`text`, `integer`, `double`, `date`, `timestamp`, `boolean`, `enum`, and
-`html`.
+name) and `type` (optional, defaults to `text`).
+
+### Supported `type` values
+
+Each corresponds to one Google Cloud Search structured data value type
+(`NamedProperty` in the API). Match this to whatever the property is
+actually declared as in your Cloud Search data source schema
+(`textPropertyOptions`, `datePropertyOptions`, etc.):
+
+| `type`      | Google API field    | Expected value format                          | Matching schema property option |
+| ----------- | -------------------- | ----------------------------------------------- | -------------------------------- |
+| `text`      | `textValues`         | Any string.                                     | `textPropertyOptions`            |
+| `integer`   | `integerValues`      | A whole number, e.g. `123`.                     | `integerPropertyOptions`         |
+| `double`    | `doubleValues`       | A decimal number, e.g. `1.5`.                   | `doublePropertyOptions`          |
+| `date`      | `dateValues`         | A calendar date with no time component, ISO-8601: `2026-07-14`. | `datePropertyOptions`            |
+| `timestamp` | `timestampValues`    | A specific point in time (date **and** time), RFC-3339: `2026-07-14T12:30:00Z`. | `timestampPropertyOptions`       |
+| `boolean`   | `booleanValue`       | `true` or `false`.                              | `booleanPropertyOptions`         |
+| `enum`      | `enumValues`         | Any string, but see the 32-value cap below.     | `enumPropertyOptions`            |
+| `html`      | `htmlValues`         | A string containing HTML markup.                | `htmlPropertyOptions`            |
+
+If you're unsure whether a date-like field should be `date` or `timestamp`:
+use `date` when the field is a calendar day with no meaningful time-of-day
+(e.g., a publish date), and `timestamp` when the time actually matters (e.g.,
+a last-crawled instant). Sending a full timestamp string as `type="date"` (or
+vice-versa) will not parse and falls back to `text` with a warning rather
+than failing the batch — see below.
+
+### Multi-valued (repeatable) fields
+
+If your Cloud Search schema declares a property as repeatable
+(`isRepeatable: true`), no special configuration is needed on this
+committer's side — every metadata field is already a list of values
+internally, and all of the types above except `boolean` accept a list
+natively (`textValues`, `integerValues`, etc. are all repeated fields in
+Google's API). Just map the field's `type` as usual and every value
+collected for that field on the document gets sent.
+
+`boolean` is the one exception: Google models `booleanValue` as a single
+scalar, not a repeatable list (Cloud Search does not support repeatable
+boolean properties), so only the *first* value collected for a field mapped
+as `type="boolean"` is sent; if your schema declares a boolean property as
+repeatable, only its first value will ever reach Cloud Search this way — use
+`enum` instead if you truly need a repeatable true/false-like field with
+more than one value.
 
 **Important:** the declared `type` must match what your Cloud Search data
-source schema actually registers for that property name (`textPropertyOptions`,
-`enumPropertyOptions`, etc.) — this committer has no way to inspect your
-schema and verify it for you. Getting this wrong is a common source of
-indexing failures, and one type deserves a specific warning: Google Cloud
-Search caps `enum` properties at **32 values per item**. A repeatable field
-(e.g., tags or keywords) that ends up with more than 32 values for a
-document will fail the whole batch if mapped as `enum` — to guard against
-that, this committer falls back to `text` and logs a warning instead of
-failing outright, but the safest choice remains: only use `type="enum"` for
-fields your schema actually declares as an enum, and leave everything else
-as `text` (integer/double/date/timestamp are comparatively safe since
-there's no ambiguity in what a correctly-formatted value like `2026-07-14` or
-`123` represents).
+source schema actually registers for that property name — this committer
+has no way to inspect your schema and verify it for you. Getting this wrong
+is a common source of indexing failures, and one type deserves a specific
+warning: Google Cloud Search caps `enum` properties at **32 values per
+item**. A repeatable field (e.g., tags or keywords) that ends up with more
+than 32 values for a document will fail the whole batch if mapped as `enum`
+— to guard against that, this committer falls back to `text` and logs a
+warning instead of failing outright, but the safest choice remains: only use
+`type="enum"` for fields your schema actually declares as an enum, and leave
+everything else as `text` (integer/double/date/timestamp are comparatively
+safe since there's no ambiguity in what a correctly-formatted value like
+`2026-07-14` or `123` represents).
 
 Values that don't parse as the declared type (e.g., `type="integer"` on a
 field containing non-numeric text) are logged as a warning and sent as

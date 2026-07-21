@@ -50,8 +50,34 @@
                 </xs:sequence>
               </xs:complexType>
             </xs:element>
-            <xs:element name="typedStructuredData" type="xs:boolean"
-              minOccurs="0" maxOccurs="1" />
+            <xs:element name="structuredData" minOccurs="0" maxOccurs="1">
+              <xs:annotation>
+                <xs:documentation>
+                  Optional structured data mapping section, declaring the
+                  Google Cloud Search value type to use for individual
+                  metadata fields sent as structured data. Fields without a
+                  matching mapping are always sent as text.
+                </xs:documentation>
+              </xs:annotation>
+              <xs:complexType>
+                <xs:sequence>
+                  <xs:element name="mapping" minOccurs="0" maxOccurs="unbounded">
+                    <xs:annotation>
+                      <xs:documentation>
+                        Declares the Google Cloud Search value type for one
+                        structured data field. The type must match what is
+                        registered for that property in the connected data
+                        source's schema.
+                      </xs:documentation>
+                    </xs:annotation>
+                    <xs:complexType>
+                      <xs:attribute name="field" type="nonEmptyString" use="required" />
+                      <xs:attribute name="type" type="structuredDataTypeValue" use="optional" />
+                    </xs:complexType>
+                  </xs:element>
+                </xs:sequence>
+              </xs:complexType>
+            </xs:element>
             <xs:element name="acl" minOccurs="0" maxOccurs="1">
               <xs:annotation>
                 <xs:documentation>
@@ -140,6 +166,21 @@
       <xs:enumeration value="containerName" />
       <xs:enumeration value="contentLanguage" />
       <xs:enumeration value="sourceRepositoryUrl" />
+      <xs:enumeration value="hash" />
+      <xs:enumeration value="keywords" />
+      <xs:enumeration value="searchQualityMetadata" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="structuredDataTypeValue">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="text" />
+      <xs:enumeration value="integer" />
+      <xs:enumeration value="double" />
+      <xs:enumeration value="date" />
+      <xs:enumeration value="timestamp" />
+      <xs:enumeration value="boolean" />
+      <xs:enumeration value="enum" />
+      <xs:enumeration value="html" />
     </xs:restriction>
   </xs:simpleType>
 </xs:schema>
