@@ -176,7 +176,8 @@ import com.norconex.commons.lang.xml.XML;
  * </metadata>
  *
  * <acl>
- * <mapping fromField="acl.reader.group" target="readers" principalType="group"/>
+ * <mapping fromField="acl.reader.group" target="readers" principalType=
+ * "group"/>
  * </acl>
  * </committer>
  * }
