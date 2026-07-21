@@ -62,8 +62,21 @@ class GoogleCloudSearchCommitterConfigTest {
                                 new GoogleCloudSearchCommitter.MetadataMapping()
                                                 .setFromField("source_url")
                                                 .setToField(GoogleCloudSearchCommitter.MetadataField.SOURCE_REPOSITORY_URL)
-                                                .setKeepFromField(true)));
-                committer.setTypedStructuredData(true);
+                                                .setKeepFromField(true),
+                                new GoogleCloudSearchCommitter.MetadataMapping()
+                                                .setFromField("tags")
+                                                .setToField(GoogleCloudSearchCommitter.MetadataField.KEYWORDS),
+                                new GoogleCloudSearchCommitter.MetadataMapping()
+                                                .setFromField("quality")
+                                                .setToField(GoogleCloudSearchCommitter.MetadataField.SEARCH_QUALITY_METADATA)
+                                                .setDefaultValue("0.0")));
+                committer.setStructuredDataMappings(List.of(
+                                new GoogleCloudSearchCommitter.StructuredDataMapping()
+                                                .setField("rating")
+                                                .setType(GoogleCloudSearchCommitter.StructuredDataType.DOUBLE),
+                                new GoogleCloudSearchCommitter.StructuredDataMapping()
+                                                .setField("status")
+                                                .setType(GoogleCloudSearchCommitter.StructuredDataType.ENUM)));
                 committer.setUploadFormat(
                                 GoogleCloudSearchCommitter.UploadFormat.TEXT);
                 committer.setRequestMode(
@@ -124,7 +137,7 @@ class GoogleCloudSearchCommitterConfigTest {
                 assertThat(loaded.getConnectorName()).isEqualTo("my-connector");
                 assertThat(loaded.getSourceIdField()).isEqualTo("unique_id");
                 assertThat(loaded.isKeepSourceIdField()).isTrue();
-                assertThat(loaded.getMetadataMappings()).hasSize(7);
+                assertThat(loaded.getMetadataMappings()).hasSize(9);
                 assertThat(loaded.getMetadataMappings().get(0).getFromField())
                                 .isEqualTo("document_title");
                 assertThat(loaded.getMetadataMappings().get(0).getToField())
@@ -143,7 +156,25 @@ class GoogleCloudSearchCommitterConfigTest {
                                 .isEqualTo("source_url");
                 assertThat(loaded.getMetadataMappings().get(6)
                                 .isKeepFromField()).isTrue();
-                assertThat(loaded.isTypedStructuredData()).isTrue();
+                assertThat(loaded.getMetadataMappings().get(7).getFromField())
+                                .isEqualTo("tags");
+                assertThat(loaded.getMetadataMappings().get(7).getToField())
+                                .isEqualTo(GoogleCloudSearchCommitter.MetadataField.KEYWORDS);
+                assertThat(loaded.getMetadataMappings().get(8).getFromField())
+                                .isEqualTo("quality");
+                assertThat(loaded.getMetadataMappings().get(8).getToField())
+                                .isEqualTo(GoogleCloudSearchCommitter.MetadataField.SEARCH_QUALITY_METADATA);
+                assertThat(loaded.getMetadataMappings().get(8)
+                                .getDefaultValue()).isEqualTo("0.0");
+                assertThat(loaded.getStructuredDataMappings()).hasSize(2);
+                assertThat(loaded.getStructuredDataMappings().get(0).getField())
+                                .isEqualTo("rating");
+                assertThat(loaded.getStructuredDataMappings().get(0).getType())
+                                .isEqualTo(GoogleCloudSearchCommitter.StructuredDataType.DOUBLE);
+                assertThat(loaded.getStructuredDataMappings().get(1).getField())
+                                .isEqualTo("status");
+                assertThat(loaded.getStructuredDataMappings().get(1).getType())
+                                .isEqualTo(GoogleCloudSearchCommitter.StructuredDataType.ENUM);
                 assertThat(loaded.getUploadFormat())
                                 .isEqualTo(GoogleCloudSearchCommitter.UploadFormat.TEXT);
                 assertThat(loaded.getRequestMode())

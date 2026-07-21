@@ -67,8 +67,15 @@ committer.
 		<mapping fromField="parentTitle" toField="containerName"/>
 		<mapping fromField="document.language" toField="contentLanguage" defaultValue="en-US"/>
 		<mapping fromField="sourceUrl" toField="sourceRepositoryUrl"/>
+		<mapping fromField="checksum" toField="hash"/>
+		<mapping fromField="tags" toField="keywords"/>
+		<mapping fromField="quality" toField="searchQualityMetadata" defaultValue="0.0"/>
 	</metadata>
-	<typedStructuredData>true</typedStructuredData>
+
+	<structuredData>
+		<mapping field="rating" type="double"/>
+		<mapping field="viewCount" type="integer"/>
+	</structuredData>
 
 	<acl>
 		<mapping fromField="acl.reader.user" target="readers" principalType="user"/>
@@ -95,11 +102,17 @@ committer.
 | `connectorName`       | No       | Same as `applicationName`                | Value sent in Google indexing requests as `connectorName`. Set this when your Cloud Search connector identity must differ from the application name.                                                                                                                                                                                                 |
 | `sourceIdField`       | No       | Document reference                       | Metadata field to use as the source item ID instead of the Norconex request reference. The chosen value is encoded into a safe Google item ID.                                                                                                                                                                                                       |
 | `keepSourceIdField`   | No       | `false`                                  | Whether the metadata field referenced by `sourceIdField` should remain in document metadata after it has been used as the item ID source.                                                                                                                                                                                                            |
-| `metadata`            | No       | Built-in defaults                        | Mapping section for Google predefined metadata fields. Each `mapping` supports `fromField` (optional), `toField` (required), `defaultValue` (optional), and `keepFromField` (optional). Supported `toField` values are `title`, `objectType`, `mimeType`, `updateTime`, `createTime`, `containerName`, `contentLanguage`, and `sourceRepositoryUrl`. |
-| `typedStructuredData` | No       | `false`                                  | Enables best-effort type inference for structured data values (integer, double, date, timestamp, enum). Values that cannot be mapped to a supported typed field are sent as text.                                                                                                                                                                    |
+| `metadata`            | No       | Built-in defaults                        | Mapping section for Google predefined metadata fields. Each `mapping` supports `fromField` (optional), `toField` (required), `defaultValue` (optional), and `keepFromField` (optional). Supported `toField` values are `title`, `objectType`, `mimeType`, `updateTime`, `createTime`, `containerName`, `contentLanguage`, `sourceRepositoryUrl`, `hash`, `keywords`, and `searchQualityMetadata`. |
+| `structuredData`      | No       | All fields sent as `text`                | Mapping section declaring the Google-native value type for individual structured data fields. See [Structured Data Mapping](#structured-data-mapping) below. |
 
 Google reference for predefined metadata fields:
-https://developers.google.com/workspace/cloud-search/docs/reference/rest/v1/ItemMetadata
+https://developers.google.com/workspace/cloud-search/docs/reference/rest/v1/indexing.datasources.items#ItemMetadata
+
+Two `ItemMetadata` fields are intentionally **not** supported by a simple
+mapping: `contextAttributes` and `interactions`. Both are lists of nested
+objects (a ranking-context attribute, and a user-interaction record with a
+principal and timestamp) rather than a single value derived from one crawled
+field, so they don't fit this committer's flat `fromField`/`toField` model.
 
 ## ACL Configuration
 
@@ -158,13 +171,50 @@ When using `raw`, add `BinaryContentTagger` in a pre-parse handler chain:
 
 ## Structured Data Mapping
 
-All metadata fields not reserved by this committer are sent as Google
-structured values.
+All metadata fields not reserved by this committer (see `metadata` and the
+exclusions below) are sent as Google structured data properties, using the
+field's own name as the property name.
 
-When `typedStructuredData=false` (default), all values are sent as text.
-When `typedStructuredData=true`, the committer tries to map values to
-Google-native types in this order: `date`, `timestamp`, `integer`, `double`,
-`enum`, then fallback to `text`.
+By default, every structured data field is sent as `text`, since that's the
+only type guaranteed to be accepted regardless of how the property is
+declared in your Cloud Search data source schema. To send a field using a
+more specific Google-native type, declare it explicitly in `structuredData`:
+
+```xml
+<structuredData>
+	<mapping field="rating" type="double"/>
+	<mapping field="viewCount" type="integer"/>
+	<mapping field="publishDate" type="date"/>
+	<mapping field="lastCrawled" type="timestamp"/>
+	<mapping field="isFeatured" type="boolean"/>
+	<mapping field="status" type="enum"/>
+	<mapping field="rawHtmlSnippet" type="html"/>
+</structuredData>
+```
+
+`mapping` attributes: `field` (required, the metadata/structured-data field
+name) and `type` (optional, defaults to `text`). Supported `type` values are
+`text`, `integer`, `double`, `date`, `timestamp`, `boolean`, `enum`, and
+`html`.
+
+**Important:** the declared `type` must match what your Cloud Search data
+source schema actually registers for that property name (`textPropertyOptions`,
+`enumPropertyOptions`, etc.) — this committer has no way to inspect your
+schema and verify it for you. Getting this wrong is a common source of
+indexing failures, and one type deserves a specific warning: Google Cloud
+Search caps `enum` properties at **32 values per item**. A repeatable field
+(e.g., tags or keywords) that ends up with more than 32 values for a
+document will fail the whole batch if mapped as `enum` — to guard against
+that, this committer falls back to `text` and logs a warning instead of
+failing outright, but the safest choice remains: only use `type="enum"` for
+fields your schema actually declares as an enum, and leave everything else
+as `text` (integer/double/date/timestamp are comparatively safe since
+there's no ambiguity in what a correctly-formatted value like `2026-07-14` or
+`123` represents).
+
+Values that don't parse as the declared type (e.g., `type="integer"` on a
+field containing non-numeric text) are logged as a warning and sent as
+`text` instead, rather than failing the batch.
 
 Excluded from structured data:
 

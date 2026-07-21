@@ -134,7 +134,55 @@ class GoogleCloudSearchCommitterMetadataCompatibilityTest {
         }
 
         @Test
-        void typedStructuredDataBuildsTypedValuesWhenEnabled()
+        void hashKeywordsAndSearchQualityMetadataAreApplied() throws Exception {
+                RecordingTransport transport = new RecordingTransport();
+                transport.enqueue(jsonResponse(successfulBatchResponseHeader(),
+                                successfulBatchResponseBody("operations/index-1")));
+
+                try (GoogleCloudSearchCommitter subject = new GoogleCloudSearchCommitter(
+                                new TestHelper(transport, 1000L))) {
+                        XML xml = minimalXml(
+                                        new File(tempDir, "placeholder.json").getAbsolutePath());
+                        xml.addElement("uploadFormat", "text");
+                        XML metadataXml = xml.addElement("metadata");
+                        metadataXml.addElement("mapping")
+                                        .setAttribute("fromField", "checksum")
+                                        .setAttribute("toField", "hash");
+                        metadataXml.addElement("mapping")
+                                        .setAttribute("fromField", "tags")
+                                        .setAttribute("toField", "keywords");
+                        metadataXml.addElement("mapping")
+                                        .setAttribute("fromField", "quality")
+                                        .setAttribute("toField", "searchQualityMetadata")
+                                        .setAttribute("defaultValue", "0.0");
+                        subject.loadBatchCommitterFromXML(xml);
+                        subject.initBatchCommitter();
+
+                        Properties metadata = new Properties();
+                        metadata.set(GoogleCloudSearchCommitter.FIELD_CONTENT_TYPE,
+                                        "text/plain");
+                        metadata.set("checksum", "abc123");
+                        metadata.set("tags", "cloud", "migration", "ai");
+
+                        List<ICommitterRequest> requests = new ArrayList<>();
+                        requests.add(new UpsertRequest(
+                                        REFERENCE,
+                                        metadata,
+                                        new ByteArrayInputStream("x".getBytes(UTF_8))));
+
+                        subject.commitBatch(requests.iterator());
+
+                        String batchBody = transport.getRequests().get(0).getContentAsString();
+                        assertThat(batchBody).contains("\"hash\":\"abc123\"");
+                        assertThat(batchBody).contains(
+                                        "\"keywords\":[\"cloud\",\"migration\",\"ai\"]");
+                        assertThat(batchBody).contains(
+                                        "\"searchQualityMetadata\":{\"quality\":0.0}");
+                }
+        }
+
+        @Test
+        void structuredDataMappingBuildsDeclaredTypedValues()
                         throws Exception {
                 RecordingTransport transport = new RecordingTransport();
                 transport.enqueue(jsonResponse(successfulBatchResponseHeader(),
@@ -145,7 +193,25 @@ class GoogleCloudSearchCommitterMetadataCompatibilityTest {
                         XML xml = minimalXml(
                                         new File(tempDir, "placeholder.json").getAbsolutePath());
                         xml.addElement("uploadFormat", "text");
-                        xml.addElement("typedStructuredData", true);
+                        XML structuredDataXml = xml.addElement("structuredData");
+                        structuredDataXml.addElement("mapping")
+                                        .setAttribute("field", "isPublished")
+                                        .setAttribute("type", "boolean");
+                        structuredDataXml.addElement("mapping")
+                                        .setAttribute("field", "count")
+                                        .setAttribute("type", "integer");
+                        structuredDataXml.addElement("mapping")
+                                        .setAttribute("field", "ratio")
+                                        .setAttribute("type", "double");
+                        structuredDataXml.addElement("mapping")
+                                        .setAttribute("field", "timestamp")
+                                        .setAttribute("type", "timestamp");
+                        structuredDataXml.addElement("mapping")
+                                        .setAttribute("field", "publishDate")
+                                        .setAttribute("type", "date");
+                        structuredDataXml.addElement("mapping")
+                                        .setAttribute("field", "status")
+                                        .setAttribute("type", "enum");
                         subject.loadBatchCommitterFromXML(xml);
                         subject.initBatchCommitter();
 
@@ -156,6 +222,56 @@ class GoogleCloudSearchCommitterMetadataCompatibilityTest {
                         metadata.set("count", "123");
                         metadata.set("ratio", "1.5");
                         metadata.set("timestamp", "2026-07-14T12:30:00Z");
+                        metadata.set("publishDate", "2026-07-14");
+                        metadata.set("status", "active");
+                        // Not declared in structuredData: must default to text.
+                        metadata.set("untyped", "some-bare-word");
+
+                        List<ICommitterRequest> requests = new ArrayList<>();
+                        requests.add(new UpsertRequest(
+                                        REFERENCE,
+                                        metadata,
+                                        new ByteArrayInputStream("x".getBytes(UTF_8))));
+
+                        subject.commitBatch(requests.iterator());
+
+                        String batchBody = transport.getRequests().get(0).getContentAsString();
+                        assertThat(batchBody).contains("\"booleanValue\":true");
+                        assertThat(batchBody)
+                                        .contains("\"integerValues\":{\"values\":[\"123\"]}");
+                        assertThat(batchBody)
+                                        .contains("\"doubleValues\":{\"values\":[1.5]}");
+                        assertThat(batchBody).contains(
+                                        "\"timestampValues\":{\"values\":[\"2026-07-14T12:30:00Z\"]}");
+                        assertThat(batchBody).contains(
+                                        "\"dateValues\":{\"values\":[{\"day\":14,\"month\":7,\"year\":2026}]}");
+                        assertThat(batchBody)
+                                        .contains("\"enumValues\":{\"values\":[\"active\"]}");
+                        assertThat(batchBody).contains(
+                                        "\"untyped\"");
+                        assertThat(batchBody)
+                                        .contains("\"textValues\":{\"values\":[\"some-bare-word\"]}");
+                }
+        }
+
+        @Test
+        void undeclaredFieldsDefaultToTextWithoutGuessing() throws Exception {
+                RecordingTransport transport = new RecordingTransport();
+                transport.enqueue(jsonResponse(successfulBatchResponseHeader(),
+                                successfulBatchResponseBody("operations/index-1")));
+
+                try (GoogleCloudSearchCommitter subject = new GoogleCloudSearchCommitter(
+                                new TestHelper(transport, 1000L))) {
+                        XML xml = minimalXml(
+                                        new File(tempDir, "placeholder.json").getAbsolutePath());
+                        xml.addElement("uploadFormat", "text");
+                        subject.loadBatchCommitterFromXML(xml);
+                        subject.initBatchCommitter();
+
+                        Properties metadata = new Properties();
+                        metadata.set(GoogleCloudSearchCommitter.FIELD_CONTENT_TYPE,
+                                        "text/plain");
+                        metadata.set("count", "123");
                         metadata.set("publishDate", "2026-07-14");
 
                         List<ICommitterRequest> requests = new ArrayList<>();
@@ -168,15 +284,52 @@ class GoogleCloudSearchCommitterMetadataCompatibilityTest {
 
                         String batchBody = transport.getRequests().get(0).getContentAsString();
                         assertThat(batchBody)
-                                        .contains("\"textValues\":{\"values\":[\"true\"]}");
+                                        .contains("\"textValues\":{\"values\":[\"123\"]}");
                         assertThat(batchBody)
-                                        .contains("\"integerValues\":{\"values\":[\"123\"]}");
-                        assertThat(batchBody)
-                                        .contains("\"doubleValues\":{\"values\":[1.5]}");
-                        assertThat(batchBody).contains(
-                                        "\"timestampValues\":{\"values\":[\"2026-07-14T12:30:00Z\"]}");
-                        assertThat(batchBody).contains(
-                                        "\"dateValues\":{\"values\":[{\"day\":14,\"month\":7,\"year\":2026}]}");
+                                        .contains("\"textValues\":{\"values\":[\"2026-07-14\"]}");
+                        assertThat(batchBody).doesNotContain("integerValues");
+                        assertThat(batchBody).doesNotContain("dateValues");
+                }
+        }
+
+        @Test
+        void enumFieldExceedingGoogleCapFallsBackToText() throws Exception {
+                RecordingTransport transport = new RecordingTransport();
+                transport.enqueue(jsonResponse(successfulBatchResponseHeader(),
+                                successfulBatchResponseBody("operations/index-1")));
+
+                try (GoogleCloudSearchCommitter subject = new GoogleCloudSearchCommitter(
+                                new TestHelper(transport, 1000L))) {
+                        XML xml = minimalXml(
+                                        new File(tempDir, "placeholder.json").getAbsolutePath());
+                        xml.addElement("uploadFormat", "text");
+                        xml.addElement("structuredData")
+                                        .addElement("mapping")
+                                        .setAttribute("field", "keyword")
+                                        .setAttribute("type", "enum");
+                        subject.loadBatchCommitterFromXML(xml);
+                        subject.initBatchCommitter();
+
+                        Properties metadata = new Properties();
+                        metadata.set(GoogleCloudSearchCommitter.FIELD_CONTENT_TYPE,
+                                        "text/plain");
+                        List<String> manyValues = new ArrayList<>();
+                        for (int i = 0; i < 36; i++) {
+                                manyValues.add("tag" + i);
+                        }
+                        metadata.set("keyword", manyValues.toArray(new String[0]));
+
+                        List<ICommitterRequest> requests = new ArrayList<>();
+                        requests.add(new UpsertRequest(
+                                        REFERENCE,
+                                        metadata,
+                                        new ByteArrayInputStream("x".getBytes(UTF_8))));
+
+                        subject.commitBatch(requests.iterator());
+
+                        String batchBody = transport.getRequests().get(0).getContentAsString();
+                        assertThat(batchBody).doesNotContain("enumValues");
+                        assertThat(batchBody).contains("\"textValues\"");
                 }
         }
 

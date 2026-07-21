@@ -61,6 +61,7 @@ import com.google.api.services.cloudsearch.v1.model.DateValues;
 import com.google.api.services.cloudsearch.v1.model.DoubleValues;
 import com.google.api.services.cloudsearch.v1.model.EnumValues;
 import com.google.api.services.cloudsearch.v1.model.GSuitePrincipal;
+import com.google.api.services.cloudsearch.v1.model.HtmlValues;
 import com.google.api.services.cloudsearch.v1.model.IndexItemRequest;
 import com.google.api.services.cloudsearch.v1.model.IntegerValues;
 import com.google.api.services.cloudsearch.v1.model.Item;
@@ -72,6 +73,7 @@ import com.google.api.services.cloudsearch.v1.model.Media;
 import com.google.api.services.cloudsearch.v1.model.NamedProperty;
 import com.google.api.services.cloudsearch.v1.model.Operation;
 import com.google.api.services.cloudsearch.v1.model.Principal;
+import com.google.api.services.cloudsearch.v1.model.SearchQualityMetadata;
 import com.google.api.services.cloudsearch.v1.model.StartUploadItemRequest;
 import com.google.api.services.cloudsearch.v1.model.StructuredDataObject;
 import com.google.api.services.cloudsearch.v1.model.TextValues;
@@ -130,7 +132,6 @@ import com.norconex.commons.lang.xml.XML;
  * <requestMode>asynchronous</requestMode>
  * <sourceIdField>document.reference</sourceIdField>
  * <keepSourceIdField>false</keepSourceIdField>
- * <typedStructuredData>true</typedStructuredData>
  * <apiEndpoint>http://localhost:8080/</apiEndpoint>
  *
  * <metadata>
@@ -142,7 +143,15 @@ import com.norconex.commons.lang.xml.XML;
  * <mapping fromField="language" toField="contentLanguage"/>
  * <mapping fromField="origin.url" toField="sourceRepositoryUrl"
  * keepFromField="true"/>
+ * <mapping fromField="keyword" toField="keywords"/>
+ * <mapping fromField="quality" toField="searchQualityMetadata"
+ * defaultValue="0.0"/>
  * </metadata>
+ *
+ * <structuredData>
+ * <mapping field="rating" type="double"/>
+ * <mapping field="viewCount" type="integer"/>
+ * </structuredData>
  *
  * <acl>
  * <mapping fromField="acl.reader.user" target="readers" principalType="user"/>
@@ -200,7 +209,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     static final String CONFIG_SOURCE_ID_FIELD = "sourceIdField";
     static final String CONFIG_KEEP_SOURCE_ID_FIELD = "keepSourceIdField";
     static final String CONFIG_METADATA = "metadata";
-    static final String CONFIG_TYPED_STRUCTURED_DATA = "typedStructuredData";
+    static final String CONFIG_STRUCTURED_DATA = "structuredData";
 
     static final String DEFAULT_APPLICATION_NAME = "Norconex Google Cloud Search Committer";
     static final String DEFAULT_TITLE_SOURCE_FIELD = "title";
@@ -210,6 +219,9 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     static final String DEFAULT_TEXT_CONTENT_TYPE = "text/plain";
     static final String DEFAULT_BINARY_CONTENT_TYPE = "application/octet-stream";
     static final int INLINE_CONTENT_MAX_BYTES = 102400;
+    // Google Cloud Search hard limit on the number of values a single
+    // enum-typed structured data property may carry per item.
+    static final int MAX_ENUM_VALUES = 32;
 
     private static final String INDEXING_SCOPE = "https://www.googleapis.com/auth/cloud_search.indexing";
     private static final String CONTENT_ITEM_TYPE = "CONTENT_ITEM";
@@ -286,7 +298,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     /**
      * Supported Google Cloud Search item metadata targets.
      * See Google reference:
-     * https://developers.google.com/workspace/cloud-search/docs/reference/rest/v1/ItemMetadata
+     * https://developers.google.com/workspace/cloud-search/docs/reference/rest/v1/indexing.datasources.items#ItemMetadata
      */
     public enum MetadataField {
         TITLE("title"),
@@ -296,7 +308,10 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         CREATE_TIME("createTime"),
         CONTAINER_NAME("containerName"),
         CONTENT_LANGUAGE("contentLanguage"),
-        SOURCE_REPOSITORY_URL("sourceRepositoryUrl");
+        SOURCE_REPOSITORY_URL("sourceRepositoryUrl"),
+        HASH("hash"),
+        KEYWORDS("keywords"),
+        SEARCH_QUALITY_METADATA("searchQualityMetadata");
 
         private final String fieldName;
 
@@ -322,9 +337,49 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         }
     }
 
+    /**
+     * Supported Google Cloud Search structured data value types.
+     * See Google reference:
+     * https://developers.google.com/workspace/cloud-search/docs/reference/rest/v1/indexing.datasources.items#NamedProperty
+     */
+    public enum StructuredDataType {
+        TEXT("text"),
+        INTEGER("integer"),
+        DOUBLE("double"),
+        DATE("date"),
+        TIMESTAMP("timestamp"),
+        BOOLEAN("boolean"),
+        ENUM("enum"),
+        HTML("html");
+
+        private final String xmlValue;
+
+        StructuredDataType(String xmlValue) {
+            this.xmlValue = xmlValue;
+        }
+
+        static StructuredDataType fromXmlValue(String value) {
+            if (value == null) {
+                return TEXT;
+            }
+            for (StructuredDataType type : values()) {
+                if (type.xmlValue.equalsIgnoreCase(value)) {
+                    return type;
+                }
+            }
+            throw new IllegalArgumentException(
+                    "Unsupported structured data type: " + value);
+        }
+
+        String getXmlValue() {
+            return xmlValue;
+        }
+    }
+
     private final Helper helper;
     private final List<AclMapping> aclMappings = new ArrayList<>();
     private final List<MetadataMapping> metadataMappings = new ArrayList<>();
+    private final List<StructuredDataMapping> structuredDataMappings = new ArrayList<>();
     private final AtomicLong versionSequence = new AtomicLong();
 
     private String secretKeyPath;
@@ -334,7 +389,6 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     private String connectorName = DEFAULT_APPLICATION_NAME;
     private String sourceIdField;
     private boolean keepSourceIdField;
-    private boolean typedStructuredData;
     private UploadFormat uploadFormat = UploadFormat.RAW;
     private RequestMode requestMode = RequestMode.ASYNCHRONOUS;
     private AclInheritanceMapping aclInheritance = new AclInheritanceMapping();
@@ -417,13 +471,16 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         return this;
     }
 
-    public boolean isTypedStructuredData() {
-        return typedStructuredData;
+    public List<StructuredDataMapping> getStructuredDataMappings() {
+        return Collections.unmodifiableList(structuredDataMappings);
     }
 
-    public GoogleCloudSearchCommitter setTypedStructuredData(
-            boolean typedStructuredData) {
-        this.typedStructuredData = typedStructuredData;
+    public GoogleCloudSearchCommitter setStructuredDataMappings(
+            List<StructuredDataMapping> structuredDataMappings) {
+        this.structuredDataMappings.clear();
+        if (structuredDataMappings != null) {
+            this.structuredDataMappings.addAll(structuredDataMappings);
+        }
         return this;
     }
 
@@ -635,6 +692,32 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         if (StringUtils.isNotBlank(sourceRepositoryUrl)) {
             itemMetadata.setSourceRepositoryUrl(sourceRepositoryUrl);
         }
+
+        String hash = resolveMetadataValue(metadata, MetadataField.HASH,
+                request.getReference(), contentType);
+        if (StringUtils.isNotBlank(hash)) {
+            itemMetadata.setHash(hash);
+        }
+
+        List<String> keywords = resolveMetadataValues(
+                metadata, MetadataField.KEYWORDS);
+        if (keywords != null && !keywords.isEmpty()) {
+            itemMetadata.setKeywords(keywords);
+        }
+
+        String quality = resolveMetadataValue(metadata,
+                MetadataField.SEARCH_QUALITY_METADATA, request.getReference(),
+                contentType);
+        if (StringUtils.isNotBlank(quality)) {
+            if (isDouble(quality)) {
+                itemMetadata.setSearchQualityMetadata(
+                        new SearchQualityMetadata()
+                                .setQuality(Double.valueOf(quality)));
+            } else {
+                log.warn("Ignoring non-numeric searchQualityMetadata "
+                        + "value: {}", quality);
+            }
+        }
         return itemMetadata;
     }
 
@@ -668,12 +751,30 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
             case CREATE_TIME:
             case CONTAINER_NAME:
             case CONTENT_LANGUAGE:
+            case HASH:
+            case SEARCH_QUALITY_METADATA:
                 return null;
             case SOURCE_REPOSITORY_URL:
                 return reference;
             default:
                 return null;
         }
+    }
+
+    private List<String> resolveMetadataValues(Properties metadata,
+            MetadataField field) {
+        MetadataMapping mapping = findMetadataMapping(field);
+        if (mapping == null) {
+            return null;
+        }
+        List<String> values = metadata.getStrings(mapping.getFromField());
+        if (values != null && !values.isEmpty()) {
+            return values;
+        }
+        if (StringUtils.isNotBlank(mapping.getDefaultValue())) {
+            return Collections.singletonList(mapping.getDefaultValue());
+        }
+        return null;
     }
 
     private MetadataMapping findMetadataMapping(MetadataField targetField) {
@@ -709,45 +810,99 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
 
     private NamedProperty toNamedProperty(String name, List<String> values) {
         NamedProperty property = new NamedProperty().setName(name);
-        if (!typedStructuredData) {
-            property.setTextValues(
-                    new TextValues().setValues(new ArrayList<>(values)));
-            return property;
-        }
+        StructuredDataType type = findStructuredDataType(name);
 
-        List<com.google.api.services.cloudsearch.v1.model.Date> dates = parseAllDates(values);
-        if (dates != null) {
-            property.setDateValues(new DateValues().setValues(dates));
-            return property;
+        switch (type) {
+            case DATE:
+                List<com.google.api.services.cloudsearch.v1.model.Date> dates =
+                        parseAllDates(values);
+                if (dates != null) {
+                    return property.setDateValues(
+                            new DateValues().setValues(dates));
+                }
+                log.warn("Field '{}' is mapped as structured data type "
+                        + "'date' but not all values could be parsed as a "
+                        + "date. Sending as text instead: {}", name, values);
+                break;
+            case TIMESTAMP:
+                if (allMatch(values, this::isRfc3339Timestamp)) {
+                    return property.setTimestampValues(new TimestampValues()
+                            .setValues(new ArrayList<>(values)));
+                }
+                log.warn("Field '{}' is mapped as structured data type "
+                        + "'timestamp' but not all values could be parsed "
+                        + "as one. Sending as text instead: {}", name, values);
+                break;
+            case INTEGER:
+                if (allMatch(values, this::isLong)) {
+                    return property.setIntegerValues(
+                            new IntegerValues().setValues(toLongs(values)));
+                }
+                log.warn("Field '{}' is mapped as structured data type "
+                        + "'integer' but not all values could be parsed as "
+                        + "one. Sending as text instead: {}", name, values);
+                break;
+            case DOUBLE:
+                if (allMatch(values, this::isDouble)) {
+                    return property.setDoubleValues(
+                            new DoubleValues().setValues(toDoubles(values)));
+                }
+                log.warn("Field '{}' is mapped as structured data type "
+                        + "'double' but not all values could be parsed as "
+                        + "one. Sending as text instead: {}", name, values);
+                break;
+            case BOOLEAN:
+                Boolean bool = toBoolean(values.get(0));
+                if (bool != null) {
+                    return property.setBooleanValue(bool);
+                }
+                log.warn("Field '{}' is mapped as structured data type "
+                        + "'boolean' but its value could not be parsed as "
+                        + "one. Sending as text instead: {}", name, values);
+                break;
+            case ENUM:
+                // Google Cloud Search caps the number of values a single
+                // enum property can carry per item. Fields exceeding it
+                // (e.g., a repeatable tag/keyword field) must fall back to
+                // text rather than fail the whole batch.
+                if (values.size() <= MAX_ENUM_VALUES) {
+                    return property.setEnumValues(
+                            new EnumValues().setValues(new ArrayList<>(values)));
+                }
+                log.warn("Field '{}' is mapped as structured data type "
+                        + "'enum' but has {} values, exceeding Google Cloud "
+                        + "Search's limit of {}. Sending as text instead.",
+                        name, values.size(), MAX_ENUM_VALUES);
+                break;
+            case HTML:
+                return property.setHtmlValues(
+                        new HtmlValues().setValues(new ArrayList<>(values)));
+            case TEXT:
+            default:
+                break;
         }
-
-        if (allMatch(values, this::isRfc3339Timestamp)) {
-            property.setTimestampValues(
-                    new TimestampValues().setValues(new ArrayList<>(values)));
-            return property;
-        }
-
-        if (allMatch(values, this::isLong)) {
-            property.setIntegerValues(
-                    new IntegerValues().setValues(toLongs(values)));
-            return property;
-        }
-
-        if (allMatch(values, this::isDouble)) {
-            property.setDoubleValues(
-                    new DoubleValues().setValues(toDoubles(values)));
-            return property;
-        }
-
-        if (allMatch(values, this::isEnumLike)) {
-            property.setEnumValues(
-                    new EnumValues().setValues(new ArrayList<>(values)));
-            return property;
-        }
-
-        property.setTextValues(
+        return property.setTextValues(
                 new TextValues().setValues(new ArrayList<>(values)));
-        return property;
+    }
+
+    private StructuredDataType findStructuredDataType(String field) {
+        for (StructuredDataMapping mapping : structuredDataMappings) {
+            if (mapping != null
+                    && java.util.Objects.equals(mapping.getField(), field)) {
+                return mapping.getType();
+            }
+        }
+        return StructuredDataType.TEXT;
+    }
+
+    private Boolean toBoolean(String value) {
+        if ("true".equalsIgnoreCase(value)) {
+            return Boolean.TRUE;
+        }
+        if ("false".equalsIgnoreCase(value)) {
+            return Boolean.FALSE;
+        }
+        return null;
     }
 
     private boolean allMatch(List<String> values,
@@ -817,13 +972,6 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         } catch (NumberFormatException e) {
             return false;
         }
-    }
-
-    private boolean isEnumLike(String value) {
-        return !"true".equalsIgnoreCase(value)
-                && !"false".equalsIgnoreCase(value)
-                && value.matches("[A-Za-z0-9_\\-]+")
-                && value.length() <= 256;
     }
 
     private boolean isRfc3339Timestamp(String value) {
@@ -1097,6 +1245,13 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
                         "Each metadata mapping must declare a non-blank toField.");
             }
         }
+        for (StructuredDataMapping mapping : structuredDataMappings) {
+            if (mapping == null || StringUtils.isBlank(mapping.getField())) {
+                throw new CommitterException(
+                        "Each structured data mapping must declare a "
+                                + "non-blank field.");
+            }
+        }
     }
 
     @Override
@@ -1110,8 +1265,6 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         sourceIdField = xml.getString(CONFIG_SOURCE_ID_FIELD, sourceIdField);
         keepSourceIdField = xml.getBoolean(
                 CONFIG_KEEP_SOURCE_ID_FIELD, keepSourceIdField);
-        typedStructuredData = xml.getBoolean(
-                CONFIG_TYPED_STRUCTURED_DATA, typedStructuredData);
 
         String uploadFormatValue = xml.getString(
                 CONFIG_UPLOAD_FORMAT, uploadFormat.name());
@@ -1129,6 +1282,15 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
                             mappingXml.getString("@toField", null)),
                     mappingXml.getString("@defaultValue", null),
                     mappingXml.getBoolean("@keepFromField", false)));
+        }
+
+        structuredDataMappings.clear();
+        for (XML mappingXml : xml.getXMLList(
+                CONFIG_STRUCTURED_DATA + "/mapping")) {
+            structuredDataMappings.add(new StructuredDataMapping(
+                    mappingXml.getString("@field", null),
+                    StructuredDataType.fromXmlValue(
+                            mappingXml.getString("@type", null))));
         }
 
         aclMappings.clear();
@@ -1162,7 +1324,6 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         xml.addElement(CONFIG_CONNECTOR_NAME, connectorName);
         xml.addElement(CONFIG_SOURCE_ID_FIELD, sourceIdField);
         xml.addElement(CONFIG_KEEP_SOURCE_ID_FIELD, keepSourceIdField);
-        xml.addElement(CONFIG_TYPED_STRUCTURED_DATA, typedStructuredData);
 
         if (!metadataMappings.isEmpty()) {
             XML metadataXml = xml.addElement(CONFIG_METADATA);
@@ -1179,6 +1340,16 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
                     mappingXml.setAttribute("defaultValue",
                             mapping.getDefaultValue());
                 }
+            }
+        }
+
+        if (!structuredDataMappings.isEmpty()) {
+            XML structuredDataXml = xml.addElement(CONFIG_STRUCTURED_DATA);
+            for (StructuredDataMapping mapping : structuredDataMappings) {
+                structuredDataXml.addElement("mapping")
+                        .setAttribute("field", mapping.getField())
+                        .setAttribute("type",
+                                mapping.getType().getXmlValue());
             }
         }
 
@@ -1299,12 +1470,52 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     }
 
     /**
+     * Declares the Google Cloud Search structured data value type to use
+     * for a given metadata field. Fields without a matching mapping are
+     * sent as {@link StructuredDataType#TEXT}, which is always a safe
+     * choice since every Cloud Search schema property accepts text.
+     * Declaring another type here must match the type actually registered
+     * for that property name in the connected data source's schema;
+     * this committer has no way to verify that on its own.
+     */
+    public static class StructuredDataMapping {
+        private String field;
+        private StructuredDataType type = StructuredDataType.TEXT;
+
+        public StructuredDataMapping() {
+        }
+
+        StructuredDataMapping(String field, StructuredDataType type) {
+            this.field = field;
+            this.type = type != null ? type : StructuredDataType.TEXT;
+        }
+
+        public String getField() {
+            return field;
+        }
+
+        public StructuredDataMapping setField(String field) {
+            this.field = field;
+            return this;
+        }
+
+        public StructuredDataType getType() {
+            return type;
+        }
+
+        public StructuredDataMapping setType(StructuredDataType type) {
+            this.type = type != null ? type : StructuredDataType.TEXT;
+            return this;
+        }
+    }
+
+    /**
      * Maps crawler metadata fields to Google Cloud Search predefined
      * metadata fields. Mapped source fields are excluded from structured
      * data unless {@code keepFromField} is set to {@code true}.
      *
      * See Google reference:
-     * https://developers.google.com/workspace/cloud-search/docs/reference/rest/v1/ItemMetadata
+     * https://developers.google.com/workspace/cloud-search/docs/reference/rest/v1/indexing.datasources.items#ItemMetadata
      */
     public static class MetadataMapping {
         private String fromField;
