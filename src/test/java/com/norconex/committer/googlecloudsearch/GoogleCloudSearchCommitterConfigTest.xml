@@ -27,6 +27,12 @@
   <connectorName>test-connector</connectorName>
   <sourceIdField>document.reference</sourceIdField>
   <keepSourceIdField>false</keepSourceIdField>
+  <httpConnectTimeoutMillis>30000</httpConnectTimeoutMillis>
+  <httpReadTimeoutMillis>120000</httpReadTimeoutMillis>
+  <httpMaxRetries>3</httpMaxRetries>
+  <httpBackoffInitialIntervalMillis>500</httpBackoffInitialIntervalMillis>
+  <httpBackoffMaxIntervalMillis>60000</httpBackoffMaxIntervalMillis>
+  <httpBackoffMaxElapsedTimeMillis>900000</httpBackoffMaxElapsedTimeMillis>
 
   <metadata>
     <mapping fromField="title" toField="title"/>

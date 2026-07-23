@@ -57,6 +57,12 @@ class GoogleCloudSearchCommitterConfigTest {
                 committer.setConnectorName("my-connector");
                 committer.setSourceIdField("unique_id");
                 committer.setKeepSourceIdField(true);
+                committer.setHttpConnectTimeoutMillis(30000);
+                committer.setHttpReadTimeoutMillis(120000);
+                committer.setHttpMaxRetries(3);
+                committer.setHttpBackoffInitialIntervalMillis(500);
+                committer.setHttpBackoffMaxIntervalMillis(60000);
+                committer.setHttpBackoffMaxElapsedTimeMillis(900000);
                 committer.setMetadataMappings(List.of(
                                 new GoogleCloudSearchCommitter.MetadataMapping()
                                                 .setFromField("document_title")
@@ -156,6 +162,17 @@ class GoogleCloudSearchCommitterConfigTest {
                 assertThat(loaded.getConnectorName()).isEqualTo("my-connector");
                 assertThat(loaded.getSourceIdField()).isEqualTo("unique_id");
                 assertThat(loaded.isKeepSourceIdField()).isTrue();
+                assertThat(loaded.getHttpConnectTimeoutMillis())
+                                .isEqualTo(30000);
+                assertThat(loaded.getHttpReadTimeoutMillis())
+                                .isEqualTo(120000);
+                assertThat(loaded.getHttpMaxRetries()).isEqualTo(3);
+                assertThat(loaded.getHttpBackoffInitialIntervalMillis())
+                                .isEqualTo(500);
+                assertThat(loaded.getHttpBackoffMaxIntervalMillis())
+                                .isEqualTo(60000);
+                assertThat(loaded.getHttpBackoffMaxElapsedTimeMillis())
+                                .isEqualTo(900000);
                 assertThat(loaded.getMetadataMappings()).hasSize(9);
                 assertThat(loaded.getMetadataMappings().get(0).getFromField())
                                 .isEqualTo("document_title");

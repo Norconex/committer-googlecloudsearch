@@ -51,11 +51,15 @@ import com.google.api.client.googleapis.batch.json.JsonBatchCallback;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.googleapis.json.GoogleJsonError;
 import com.google.api.client.http.ByteArrayContent;
+import com.google.api.client.http.HttpBackOffIOExceptionHandler;
+import com.google.api.client.http.HttpBackOffUnsuccessfulResponseHandler;
 import com.google.api.client.http.HttpHeaders;
+import com.google.api.client.http.HttpRequest;
 import com.google.api.client.http.HttpRequestInitializer;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.gson.GsonFactory;
+import com.google.api.client.util.ExponentialBackOff;
 import com.google.api.services.cloudsearch.v1.CloudSearch;
 import com.google.api.services.cloudsearch.v1.model.DateValues;
 import com.google.api.services.cloudsearch.v1.model.DoubleValues;
@@ -133,6 +137,12 @@ import com.norconex.commons.lang.xml.XML;
  * <sourceIdField>document.reference</sourceIdField>
  * <keepSourceIdField>false</keepSourceIdField>
  * <apiEndpoint>http://localhost:8080/</apiEndpoint>
+ * <httpConnectTimeoutMillis>30000</httpConnectTimeoutMillis>
+ * <httpReadTimeoutMillis>120000</httpReadTimeoutMillis>
+ * <httpMaxRetries>3</httpMaxRetries>
+ * <httpBackoffInitialIntervalMillis>500</httpBackoffInitialIntervalMillis>
+ * <httpBackoffMaxIntervalMillis>60000</httpBackoffMaxIntervalMillis>
+ * <httpBackoffMaxElapsedTimeMillis>900000</httpBackoffMaxElapsedTimeMillis>
  *
  * <metadata>
  * <mapping fromField="title" toField="title"/>
@@ -208,6 +218,12 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     static final String CONFIG_CONNECTOR_NAME = "connectorName";
     static final String CONFIG_SOURCE_ID_FIELD = "sourceIdField";
     static final String CONFIG_KEEP_SOURCE_ID_FIELD = "keepSourceIdField";
+    static final String CONFIG_HTTP_CONNECT_TIMEOUT_MILLIS = "httpConnectTimeoutMillis";
+    static final String CONFIG_HTTP_READ_TIMEOUT_MILLIS = "httpReadTimeoutMillis";
+    static final String CONFIG_HTTP_MAX_RETRIES = "httpMaxRetries";
+    static final String CONFIG_HTTP_BACKOFF_INITIAL_INTERVAL_MILLIS = "httpBackoffInitialIntervalMillis";
+    static final String CONFIG_HTTP_BACKOFF_MAX_INTERVAL_MILLIS = "httpBackoffMaxIntervalMillis";
+    static final String CONFIG_HTTP_BACKOFF_MAX_ELAPSED_TIME_MILLIS = "httpBackoffMaxElapsedTimeMillis";
     static final String CONFIG_METADATA = "metadata";
     static final String CONFIG_STRUCTURED_DATA = "structuredData";
 
@@ -392,6 +408,12 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     private UploadFormat uploadFormat = UploadFormat.RAW;
     private RequestMode requestMode = RequestMode.ASYNCHRONOUS;
     private AclInheritanceMapping aclInheritance = new AclInheritanceMapping();
+    private int httpConnectTimeoutMillis = -1;
+    private int httpReadTimeoutMillis = -1;
+    private int httpMaxRetries = -1;
+    private int httpBackoffInitialIntervalMillis = -1;
+    private int httpBackoffMaxIntervalMillis = -1;
+    private int httpBackoffMaxElapsedTimeMillis = -1;
 
     private CloudSearch cloudSearch;
 
@@ -502,6 +524,65 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         return this;
     }
 
+    public int getHttpConnectTimeoutMillis() {
+        return httpConnectTimeoutMillis;
+    }
+
+    public GoogleCloudSearchCommitter setHttpConnectTimeoutMillis(
+            int httpConnectTimeoutMillis) {
+        this.httpConnectTimeoutMillis = httpConnectTimeoutMillis;
+        return this;
+    }
+
+    public int getHttpReadTimeoutMillis() {
+        return httpReadTimeoutMillis;
+    }
+
+    public GoogleCloudSearchCommitter setHttpReadTimeoutMillis(
+            int httpReadTimeoutMillis) {
+        this.httpReadTimeoutMillis = httpReadTimeoutMillis;
+        return this;
+    }
+
+    public int getHttpMaxRetries() {
+        return httpMaxRetries;
+    }
+
+    public GoogleCloudSearchCommitter setHttpMaxRetries(int httpMaxRetries) {
+        this.httpMaxRetries = httpMaxRetries;
+        return this;
+    }
+
+    public int getHttpBackoffInitialIntervalMillis() {
+        return httpBackoffInitialIntervalMillis;
+    }
+
+    public GoogleCloudSearchCommitter setHttpBackoffInitialIntervalMillis(
+            int httpBackoffInitialIntervalMillis) {
+        this.httpBackoffInitialIntervalMillis = httpBackoffInitialIntervalMillis;
+        return this;
+    }
+
+    public int getHttpBackoffMaxIntervalMillis() {
+        return httpBackoffMaxIntervalMillis;
+    }
+
+    public GoogleCloudSearchCommitter setHttpBackoffMaxIntervalMillis(
+            int httpBackoffMaxIntervalMillis) {
+        this.httpBackoffMaxIntervalMillis = httpBackoffMaxIntervalMillis;
+        return this;
+    }
+
+    public int getHttpBackoffMaxElapsedTimeMillis() {
+        return httpBackoffMaxElapsedTimeMillis;
+    }
+
+    public GoogleCloudSearchCommitter setHttpBackoffMaxElapsedTimeMillis(
+            int httpBackoffMaxElapsedTimeMillis) {
+        this.httpBackoffMaxElapsedTimeMillis = httpBackoffMaxElapsedTimeMillis;
+        return this;
+    }
+
     public List<AclMapping> getAclMappings() {
         return Collections.unmodifiableList(aclMappings);
     }
@@ -539,7 +620,19 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         validateConfiguration();
         try {
             cloudSearch = helper.createCloudSearch(
-                    applicationName, secretKeyPath, apiEndpoint);
+                    applicationName,
+                    secretKeyPath,
+                    apiEndpoint,
+                    new HttpRequestOptions()
+                            .setConnectTimeoutMillis(httpConnectTimeoutMillis)
+                            .setReadTimeoutMillis(httpReadTimeoutMillis)
+                            .setMaxRetries(httpMaxRetries)
+                            .setBackoffInitialIntervalMillis(
+                                    httpBackoffInitialIntervalMillis)
+                            .setBackoffMaxIntervalMillis(
+                                    httpBackoffMaxIntervalMillis)
+                            .setBackoffMaxElapsedTimeMillis(
+                                    httpBackoffMaxElapsedTimeMillis));
         } catch (IOException | GeneralSecurityException e) {
             throw new CommitterException(
                     "Could not initialize Google Cloud Search client.", e);
@@ -814,8 +907,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
 
         switch (type) {
             case DATE:
-                List<com.google.api.services.cloudsearch.v1.model.Date> dates =
-                        parseAllDates(values);
+                List<com.google.api.services.cloudsearch.v1.model.Date> dates = parseAllDates(values);
                 if (dates != null) {
                     return property.setDateValues(
                             new DateValues().setValues(dates));
@@ -1239,6 +1331,21 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         if (StringUtils.isBlank(connectorName)) {
             connectorName = applicationName;
         }
+        validateOptionalNonNegative(CONFIG_HTTP_CONNECT_TIMEOUT_MILLIS,
+                httpConnectTimeoutMillis);
+        validateOptionalNonNegative(CONFIG_HTTP_READ_TIMEOUT_MILLIS,
+                httpReadTimeoutMillis);
+        validateOptionalNonNegative(CONFIG_HTTP_MAX_RETRIES,
+                httpMaxRetries);
+        validateOptionalNonNegative(
+                CONFIG_HTTP_BACKOFF_INITIAL_INTERVAL_MILLIS,
+                httpBackoffInitialIntervalMillis);
+        validateOptionalNonNegative(
+                CONFIG_HTTP_BACKOFF_MAX_INTERVAL_MILLIS,
+                httpBackoffMaxIntervalMillis);
+        validateOptionalNonNegative(
+                CONFIG_HTTP_BACKOFF_MAX_ELAPSED_TIME_MILLIS,
+                httpBackoffMaxElapsedTimeMillis);
         for (MetadataMapping mapping : metadataMappings) {
             if (mapping == null || mapping.getToField() == null) {
                 throw new CommitterException(
@@ -1254,6 +1361,16 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         }
     }
 
+    private void validateOptionalNonNegative(String name, int value)
+            throws CommitterException {
+        if (value < -1) {
+            throw new CommitterException(
+                    "Invalid value for " + name
+                            + ". Use -1 to keep library defaults or "
+                            + "a value >= 0.");
+        }
+    }
+
     @Override
     protected void loadBatchCommitterFromXML(XML xml) {
         secretKeyPath = xml.getString(CONFIG_SECRET_KEY_PATH, secretKeyPath);
@@ -1265,6 +1382,24 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         sourceIdField = xml.getString(CONFIG_SOURCE_ID_FIELD, sourceIdField);
         keepSourceIdField = xml.getBoolean(
                 CONFIG_KEEP_SOURCE_ID_FIELD, keepSourceIdField);
+        httpConnectTimeoutMillis = xml.getInteger(
+                CONFIG_HTTP_CONNECT_TIMEOUT_MILLIS,
+                httpConnectTimeoutMillis);
+        httpReadTimeoutMillis = xml.getInteger(
+                CONFIG_HTTP_READ_TIMEOUT_MILLIS,
+                httpReadTimeoutMillis);
+        httpMaxRetries = xml.getInteger(
+                CONFIG_HTTP_MAX_RETRIES,
+                httpMaxRetries);
+        httpBackoffInitialIntervalMillis = xml.getInteger(
+                CONFIG_HTTP_BACKOFF_INITIAL_INTERVAL_MILLIS,
+                httpBackoffInitialIntervalMillis);
+        httpBackoffMaxIntervalMillis = xml.getInteger(
+                CONFIG_HTTP_BACKOFF_MAX_INTERVAL_MILLIS,
+                httpBackoffMaxIntervalMillis);
+        httpBackoffMaxElapsedTimeMillis = xml.getInteger(
+                CONFIG_HTTP_BACKOFF_MAX_ELAPSED_TIME_MILLIS,
+                httpBackoffMaxElapsedTimeMillis);
 
         String uploadFormatValue = xml.getString(
                 CONFIG_UPLOAD_FORMAT, uploadFormat.name());
@@ -1324,6 +1459,20 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         xml.addElement(CONFIG_CONNECTOR_NAME, connectorName);
         xml.addElement(CONFIG_SOURCE_ID_FIELD, sourceIdField);
         xml.addElement(CONFIG_KEEP_SOURCE_ID_FIELD, keepSourceIdField);
+        xml.addElement(
+                CONFIG_HTTP_CONNECT_TIMEOUT_MILLIS,
+                httpConnectTimeoutMillis);
+        xml.addElement(CONFIG_HTTP_READ_TIMEOUT_MILLIS, httpReadTimeoutMillis);
+        xml.addElement(CONFIG_HTTP_MAX_RETRIES, httpMaxRetries);
+        xml.addElement(
+                CONFIG_HTTP_BACKOFF_INITIAL_INTERVAL_MILLIS,
+                httpBackoffInitialIntervalMillis);
+        xml.addElement(
+                CONFIG_HTTP_BACKOFF_MAX_INTERVAL_MILLIS,
+                httpBackoffMaxIntervalMillis);
+        xml.addElement(
+                CONFIG_HTTP_BACKOFF_MAX_ELAPSED_TIME_MILLIS,
+                httpBackoffMaxElapsedTimeMillis);
 
         if (!metadataMappings.isEmpty()) {
             XML metadataXml = xml.addElement(CONFIG_METADATA);
@@ -1377,9 +1526,12 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     static class Helper {
         CloudSearch createCloudSearch(String applicationName,
                 String secretKeyPath,
-                String apiEndpoint)
+                String apiEndpoint,
+                HttpRequestOptions httpOptions)
                 throws IOException, GeneralSecurityException {
-            HttpRequestInitializer initializer = createRequestInitializer(secretKeyPath);
+            HttpRequestInitializer initializer = createRequestInitializer(
+                    secretKeyPath,
+                    httpOptions);
             CloudSearch.Builder builder = new CloudSearch.Builder(
                     createHttpTransport(), createJsonFactory(), initializer)
                     .setApplicationName(applicationName);
@@ -1398,13 +1550,22 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
             return GsonFactory.getDefaultInstance();
         }
 
-        HttpRequestInitializer createRequestInitializer(String secretKeyPath)
+        HttpRequestInitializer createRequestInitializer(
+                String secretKeyPath,
+                HttpRequestOptions httpOptions)
                 throws IOException {
             try (InputStream input = new FileInputStream(secretKeyPath)) {
                 GoogleCredentials credentials = ServiceAccountCredentials
                         .fromStream(input)
                         .createScoped(Collections.singleton(INDEXING_SCOPE));
-                return new HttpCredentialsAdapter(credentials);
+                HttpRequestInitializer authInitializer = new HttpCredentialsAdapter(credentials);
+                HttpRequestOptions options = httpOptions != null
+                        ? httpOptions
+                        : new HttpRequestOptions();
+                return request -> {
+                    authInitializer.initialize(request);
+                    options.apply(request);
+                };
             }
         }
 
@@ -1423,6 +1584,86 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
 
         private String ensureTrailingSlash(String value) {
             return value.endsWith("/") ? value : value + "/";
+        }
+    }
+
+    static final class HttpRequestOptions {
+        private int connectTimeoutMillis = -1;
+        private int readTimeoutMillis = -1;
+        private int maxRetries = -1;
+        private int backoffInitialIntervalMillis = -1;
+        private int backoffMaxIntervalMillis = -1;
+        private int backoffMaxElapsedTimeMillis = -1;
+
+        HttpRequestOptions setConnectTimeoutMillis(int connectTimeoutMillis) {
+            this.connectTimeoutMillis = connectTimeoutMillis;
+            return this;
+        }
+
+        HttpRequestOptions setReadTimeoutMillis(int readTimeoutMillis) {
+            this.readTimeoutMillis = readTimeoutMillis;
+            return this;
+        }
+
+        HttpRequestOptions setMaxRetries(int maxRetries) {
+            this.maxRetries = maxRetries;
+            return this;
+        }
+
+        HttpRequestOptions setBackoffInitialIntervalMillis(
+                int backoffInitialIntervalMillis) {
+            this.backoffInitialIntervalMillis = backoffInitialIntervalMillis;
+            return this;
+        }
+
+        HttpRequestOptions setBackoffMaxIntervalMillis(
+                int backoffMaxIntervalMillis) {
+            this.backoffMaxIntervalMillis = backoffMaxIntervalMillis;
+            return this;
+        }
+
+        HttpRequestOptions setBackoffMaxElapsedTimeMillis(
+                int backoffMaxElapsedTimeMillis) {
+            this.backoffMaxElapsedTimeMillis = backoffMaxElapsedTimeMillis;
+            return this;
+        }
+
+        void apply(HttpRequest request) {
+            if (connectTimeoutMillis >= 0) {
+                request.setConnectTimeout(connectTimeoutMillis);
+            }
+            if (readTimeoutMillis >= 0) {
+                request.setReadTimeout(readTimeoutMillis);
+            }
+            if (maxRetries >= 0) {
+                request.setNumberOfRetries(maxRetries);
+            }
+
+            if (backoffInitialIntervalMillis < 0
+                    && backoffMaxIntervalMillis < 0
+                    && backoffMaxElapsedTimeMillis < 0) {
+                return;
+            }
+
+            ExponentialBackOff.Builder builder = new ExponentialBackOff.Builder();
+            if (backoffInitialIntervalMillis >= 0) {
+                builder.setInitialIntervalMillis(backoffInitialIntervalMillis);
+            }
+            if (backoffMaxIntervalMillis >= 0) {
+                builder.setMaxIntervalMillis(backoffMaxIntervalMillis);
+            }
+            if (backoffMaxElapsedTimeMillis >= 0) {
+                builder.setMaxElapsedTimeMillis(
+                        backoffMaxElapsedTimeMillis);
+            }
+
+            request.setIOExceptionHandler(new HttpBackOffIOExceptionHandler(
+                    builder.build()));
+            request.setUnsuccessfulResponseHandler(
+                    new HttpBackOffUnsuccessfulResponseHandler(
+                            builder.build())
+                            .setBackOffRequired(
+                                    HttpBackOffUnsuccessfulResponseHandler.BackOffRequired.ON_SERVER_ERROR));
         }
     }
 

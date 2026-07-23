@@ -384,7 +384,8 @@ class GoogleCloudSearchCommitterMetadataCompatibilityTest {
                 @Override
                 CloudSearch createCloudSearch(String applicationName,
                                 String secretKeyPath,
-                                String apiEndpoint) {
+                                String apiEndpoint,
+                                GoogleCloudSearchCommitter.HttpRequestOptions httpOptions) {
                         return new CloudSearch.Builder(
                                         transport,
                                         JSON_FACTORY,

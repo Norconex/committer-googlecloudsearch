@@ -24,6 +24,18 @@
               minOccurs="0" maxOccurs="1" />
             <xs:element name="keepSourceIdField" type="xs:boolean"
               minOccurs="0" maxOccurs="1" />
+            <xs:element name="httpConnectTimeoutMillis" type="xs:int"
+              minOccurs="0" maxOccurs="1" />
+            <xs:element name="httpReadTimeoutMillis" type="xs:int"
+              minOccurs="0" maxOccurs="1" />
+            <xs:element name="httpMaxRetries" type="xs:int"
+              minOccurs="0" maxOccurs="1" />
+            <xs:element name="httpBackoffInitialIntervalMillis" type="xs:int"
+              minOccurs="0" maxOccurs="1" />
+            <xs:element name="httpBackoffMaxIntervalMillis" type="xs:int"
+              minOccurs="0" maxOccurs="1" />
+            <xs:element name="httpBackoffMaxElapsedTimeMillis" type="xs:int"
+              minOccurs="0" maxOccurs="1" />
             <xs:element name="metadata" minOccurs="0" maxOccurs="1">
               <xs:annotation>
                 <xs:documentation>

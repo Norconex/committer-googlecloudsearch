@@ -36,6 +36,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
+import com.google.api.client.http.GenericUrl;
 import com.google.api.client.http.HttpRequestInitializer;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.http.LowLevelHttpRequest;
@@ -61,6 +62,29 @@ class GoogleCloudSearchCommitterTest {
 
         @TempDir
         File tempDir;
+
+        @Test
+        void httpRequestOptionsApplyConfiguredValues() throws Exception {
+                var options = new GoogleCloudSearchCommitter.HttpRequestOptions()
+                                .setConnectTimeoutMillis(1234)
+                                .setReadTimeoutMillis(5678)
+                                .setMaxRetries(9)
+                                .setBackoffInitialIntervalMillis(500)
+                                .setBackoffMaxIntervalMillis(10000)
+                                .setBackoffMaxElapsedTimeMillis(60000);
+
+                var request = new MockHttpTransport()
+                                .createRequestFactory()
+                                .buildGetRequest(new GenericUrl("http://localhost/test"));
+
+                options.apply(request);
+
+                assertThat(request.getConnectTimeout()).isEqualTo(1234);
+                assertThat(request.getReadTimeout()).isEqualTo(5678);
+                assertThat(request.getNumberOfRetries()).isEqualTo(9);
+                assertThat(request.getIOExceptionHandler()).isNotNull();
+                assertThat(request.getUnsuccessfulResponseHandler()).isNotNull();
+        }
 
         @Test
         void loadFromXmlAndSaveToXmlSupportAclMappings() throws Exception {
@@ -344,7 +368,8 @@ class GoogleCloudSearchCommitterTest {
 
                 @Override
                 CloudSearch createCloudSearch(String applicationName, String secretKeyPath,
-                                String apiEndpoint) {
+                                String apiEndpoint,
+                                GoogleCloudSearchCommitter.HttpRequestOptions httpOptions) {
                         return new CloudSearch.Builder(
                                         transport,
                                         JSON_FACTORY,
