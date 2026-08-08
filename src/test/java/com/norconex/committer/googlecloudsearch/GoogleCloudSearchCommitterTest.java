@@ -31,6 +31,8 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Deque;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -55,10 +57,13 @@ import com.norconex.commons.lang.xml.XML;
 
 class GoogleCloudSearchCommitterTest {
 
-        private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
+        private static final JsonFactory JSON_FACTORY =
+                        GsonFactory.getDefaultInstance();
         private static final String CONTENT = "test body";
-        private static final String CONTENT_BASE64 = Base64.getEncoder().encodeToString(CONTENT.getBytes(UTF_8));
+        private static final String CONTENT_BASE64 = Base64.getEncoder()
+                        .encodeToString(CONTENT.getBytes(UTF_8));
         private static final String REFERENCE = "https://example.com/path?q=1";
+        private static final String VERSION_PATTERN = "\\d{19}-\\d{12}";
 
         @TempDir
         File tempDir;
@@ -75,7 +80,8 @@ class GoogleCloudSearchCommitterTest {
 
                 var request = new MockHttpTransport()
                                 .createRequestFactory()
-                                .buildGetRequest(new GenericUrl("http://localhost/test"));
+                                .buildGetRequest(new GenericUrl(
+                                                "http://localhost/test"));
 
                 options.apply(request);
 
@@ -83,14 +89,17 @@ class GoogleCloudSearchCommitterTest {
                 assertThat(request.getReadTimeout()).isEqualTo(5678);
                 assertThat(request.getNumberOfRetries()).isEqualTo(9);
                 assertThat(request.getIOExceptionHandler()).isNotNull();
-                assertThat(request.getUnsuccessfulResponseHandler()).isNotNull();
+                assertThat(request.getUnsuccessfulResponseHandler())
+                                .isNotNull();
         }
 
         @Test
         void loadFromXmlAndSaveToXmlSupportAclMappings() throws Exception {
-                try (GoogleCloudSearchCommitter subject = new GoogleCloudSearchCommitter()) {
+                try (GoogleCloudSearchCommitter subject =
+                                new GoogleCloudSearchCommitter()) {
                         XML xml = new XML("committer");
-                        xml.addElement("secretKeyPath", "/tmp/service-account.json");
+                        xml.addElement("secretKeyPath",
+                                        "/tmp/service-account.json");
                         xml.addElement("dataSourceId", "datasource-id");
                         XML aclXml = xml.addElement("acl");
                         aclXml.addElement("mapping")
@@ -98,8 +107,10 @@ class GoogleCloudSearchCommitterTest {
                                         .setAttribute("target", "readers")
                                         .setAttribute("principalType", "user");
                         aclXml.addElement("inherit")
-                                        .setAttribute("fromField", "parentReference")
-                                        .setAttribute("aclInheritanceType", "BOTH_PERMIT");
+                                        .setAttribute("fromField",
+                                                        "parentReference")
+                                        .setAttribute("aclInheritanceType",
+                                                        "BOTH_PERMIT");
 
                         subject.loadBatchCommitterFromXML(xml);
 
@@ -113,10 +124,10 @@ class GoogleCloudSearchCommitterTest {
                         assertThat(saved.getXMLList("acl/mapping")).hasSize(1);
                         assertThat(saved.getXML("acl/mapping")
                                         .getString("@principalType", null))
-                                        .isEqualTo("user");
+                                                        .isEqualTo("user");
                         assertThat(saved.getXML("acl/inherit")
                                         .getString("@aclInheritanceType", null))
-                                        .isEqualTo("BOTH_PERMIT");
+                                                        .isEqualTo("BOTH_PERMIT");
                 }
         }
 
@@ -125,12 +136,16 @@ class GoogleCloudSearchCommitterTest {
                         throws Exception {
                 RecordingTransport transport = new RecordingTransport();
                 transport.enqueue(jsonResponse(successfulBatchResponseHeader(),
-                                successfulBatchResponseBody("operations/index-1")));
+                                successfulBatchResponseBody(
+                                                "operations/index-1")));
 
-                try (GoogleCloudSearchCommitter subject = new GoogleCloudSearchCommitter(
-                                new TestHelper(transport, 1000L))) {
+                try (GoogleCloudSearchCommitter subject =
+                                new GoogleCloudSearchCommitter(
+                                                new TestHelper(transport,
+                                                                1000L))) {
                         XML xml = minimalXml(
-                                        new File(tempDir, "placeholder.json").getAbsolutePath(),
+                                        new File(tempDir, "placeholder.json")
+                                                        .getAbsolutePath(),
                                         "https://mock.local/");
                         xml.addElement("uploadFormat", "text");
                         XML aclXml = xml.addElement("acl");
@@ -145,36 +160,42 @@ class GoogleCloudSearchCommitterTest {
                         metadata.set("title", "Example title");
                         metadata.set("objectType", "webpage");
                         metadata.set("acl.reader", "reader@example.com");
-                        metadata.set(GoogleCloudSearchCommitter.FIELD_CONTENT_TYPE, "text/plain");
+                        metadata.set(GoogleCloudSearchCommitter.FIELD_CONTENT_TYPE,
+                                        "text/plain");
 
                         List<ICommitterRequest> requests = new ArrayList<>();
                         requests.add(new UpsertRequest(
                                         REFERENCE,
                                         metadata,
-                                        new ByteArrayInputStream(CONTENT.getBytes(UTF_8))));
-                        requests.add(new DeleteRequest(REFERENCE + "/delete", new Properties()));
+                                        new ByteArrayInputStream(CONTENT
+                                                        .getBytes(UTF_8))));
+                        requests.add(new DeleteRequest(REFERENCE + "/delete",
+                                        new Properties()));
 
                         subject.commitBatch(requests.iterator());
 
-                        assertThat(transport.getUrls()).contains("https://mock.local/batch");
-                        String batchBody = transport.getRequests().get(0).getContentAsString();
+                        assertThat(transport.getUrls())
+                                        .contains("https://mock.local/batch");
+                        String batchBody = transport.getRequests().get(0)
+                                        .getContentAsString();
                         assertThat(batchBody).contains(":index");
                         assertThat(batchBody).contains("DELETE");
                         assertThat(batchBody).contains("Example title");
                         assertThat(batchBody).contains("reader@example.com");
 
-                        // Item.version is a base64-encoded bytes field on the wire.
-                        // Regression test for a bug where the raw, unencoded version
-                        // string was sent as-is, which the real Cloud Search API
-                        // rejected with "Base64 decoding failed".
-                        java.util.regex.Matcher versionMatcher = java.util.regex.Pattern
-                                        .compile("\"version\":\"([^\"]+)\"")
-                                        .matcher(batchBody);
-                        assertThat(versionMatcher.find()).isTrue();
-                        String decodedVersion = new String(
-                                        Base64.getUrlDecoder().decode(versionMatcher.group(1)),
-                                        UTF_8);
-                        assertThat(decodedVersion).matches("\\d{19}-\\d{6}");
+                        // Both Item.version and the delete request's "version"
+                        // query parameter are base64-encoded bytes fields on
+                        // the wire. Regression test for a bug where the raw,
+                        // unencoded version string was sent as-is, which the
+                        // real Cloud Search API rejected -- on deletes with
+                        // "DeleteItemRequest.version cannot be
+                        // zero/empty/uninitialised", because the raw string
+                        // contains a "-" that standard base64 cannot decode.
+                        assertThat(decodeVersion(extractIndexVersion(batchBody)))
+                                        .matches(VERSION_PATTERN);
+                        assertThat(decodeVersion(
+                                        extractDeleteVersion(batchBody)))
+                                                        .matches(VERSION_PATTERN);
                 }
         }
 
@@ -188,12 +209,16 @@ class GoogleCloudSearchCommitterTest {
                 // read access instead of omitting the field.
                 RecordingTransport transport = new RecordingTransport();
                 transport.enqueue(jsonResponse(successfulBatchResponseHeader(),
-                                successfulBatchResponseBody("operations/index-1")));
+                                successfulBatchResponseBody(
+                                                "operations/index-1")));
 
-                try (GoogleCloudSearchCommitter subject = new GoogleCloudSearchCommitter(
-                                new TestHelper(transport, 1000L))) {
+                try (GoogleCloudSearchCommitter subject =
+                                new GoogleCloudSearchCommitter(
+                                                new TestHelper(transport,
+                                                                1000L))) {
                         XML xml = minimalXml(
-                                        new File(tempDir, "placeholder.json").getAbsolutePath(),
+                                        new File(tempDir, "placeholder.json")
+                                                        .getAbsolutePath(),
                                         "https://mock.local/");
                         xml.addElement("uploadFormat", "text");
                         subject.loadBatchCommitterFromXML(xml);
@@ -202,17 +227,20 @@ class GoogleCloudSearchCommitterTest {
                         Properties metadata = new Properties();
                         metadata.set("title", "Example title");
                         metadata.set("objectType", "webpage");
-                        metadata.set(GoogleCloudSearchCommitter.FIELD_CONTENT_TYPE, "text/plain");
+                        metadata.set(GoogleCloudSearchCommitter.FIELD_CONTENT_TYPE,
+                                        "text/plain");
 
                         List<ICommitterRequest> requests = new ArrayList<>();
                         requests.add(new UpsertRequest(
                                         REFERENCE,
                                         metadata,
-                                        new ByteArrayInputStream(CONTENT.getBytes(UTF_8))));
+                                        new ByteArrayInputStream(CONTENT
+                                                        .getBytes(UTF_8))));
 
                         subject.commitBatch(requests.iterator());
 
-                        String batchBody = transport.getRequests().get(0).getContentAsString();
+                        String batchBody = transport.getRequests().get(0)
+                                        .getContentAsString();
                         assertThat(batchBody).contains("\"acl\"");
                         assertThat(batchBody).contains("gsuiteDomain");
                 }
@@ -223,41 +251,60 @@ class GoogleCloudSearchCommitterTest {
                 WireMockServer server = new WireMockServer();
                 try {
                         server.start();
-                        server.stubFor(com.github.tomakehurst.wiremock.client.WireMock.post(
-                                        com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo(
-                                                        "/oauth2/v4/token"))
-                                        .willReturn(com.github.tomakehurst.wiremock.client.WireMock.aResponse()
-                                                        .withHeader("Content-Type", "application/json")
+                        server.stubFor(com.github.tomakehurst.wiremock.client.WireMock
+                                        .post(
+                                                        com.github.tomakehurst.wiremock.client.WireMock
+                                                                        .urlPathEqualTo(
+                                                                                        "/oauth2/v4/token"))
+                                        .willReturn(com.github.tomakehurst.wiremock.client.WireMock
+                                                        .aResponse()
+                                                        .withHeader("Content-Type",
+                                                                        "application/json")
                                                         .withBody("{\"access_token\":\"token\","
                                                                         + "\"token_type\":\"Bearer\","
                                                                         + "\"expires_in\":3600}")));
-                        server.stubFor(com.github.tomakehurst.wiremock.client.WireMock.post(
-                                        com.github.tomakehurst.wiremock.client.WireMock.urlMatching(
-                                                        "/v1/indexing/datasources/.*/items/.*:upload"))
-                                        .willReturn(com.github.tomakehurst.wiremock.client.WireMock.aResponse()
-                                                        .withHeader("Content-Type", "application/json")
+                        server.stubFor(com.github.tomakehurst.wiremock.client.WireMock
+                                        .post(
+                                                        com.github.tomakehurst.wiremock.client.WireMock
+                                                                        .urlMatching(
+                                                                                        "/v1/indexing/datasources/.*/items/.*:upload"))
+                                        .willReturn(com.github.tomakehurst.wiremock.client.WireMock
+                                                        .aResponse()
+                                                        .withHeader("Content-Type",
+                                                                        "application/json")
                                                         .withBody("{\"name\":\"uploadItems/test-upload\"}")));
                         // The real media.upload endpoint returns an empty body on
                         // success (unlike the Media-typed response the generated
                         // client stub declares). Mimicking that here catches
                         // regressions where the response gets parsed as JSON.
-                        server.stubFor(com.github.tomakehurst.wiremock.client.WireMock.post(
-                                        com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching(
-                                                        "/upload/v1/media/.*"))
-                                        .willReturn(com.github.tomakehurst.wiremock.client.WireMock.aResponse()
+                        server.stubFor(com.github.tomakehurst.wiremock.client.WireMock
+                                        .post(
+                                                        com.github.tomakehurst.wiremock.client.WireMock
+                                                                        .urlPathMatching(
+                                                                                        "/upload/v1/media/.*"))
+                                        .willReturn(com.github.tomakehurst.wiremock.client.WireMock
+                                                        .aResponse()
                                                         .withStatus(200)));
-                        server.stubFor(com.github.tomakehurst.wiremock.client.WireMock.post(
-                                        com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo("/batch"))
-                                        .willReturn(com.github.tomakehurst.wiremock.client.WireMock.aResponse()
+                        server.stubFor(com.github.tomakehurst.wiremock.client.WireMock
+                                        .post(
+                                                        com.github.tomakehurst.wiremock.client.WireMock
+                                                                        .urlPathEqualTo("/batch"))
+                                        .willReturn(com.github.tomakehurst.wiremock.client.WireMock
+                                                        .aResponse()
                                                         .withHeader(
-                                                                        "Content-Type", successfulBatchResponseHeader())
+                                                                        "Content-Type",
+                                                                        successfulBatchResponseHeader())
                                                         .withBody(successfulBatchResponseBody(
                                                                         "operations/index-raw"))));
 
-                        File secretFile = createServiceAccountJson(server.baseUrl());
+                        File secretFile = createServiceAccountJson(
+                                        server.baseUrl());
 
-                        try (GoogleCloudSearchCommitter subject = new GoogleCloudSearchCommitter()) {
-                                XML xml = minimalXml(secretFile.getAbsolutePath(), server.baseUrl() + "/");
+                        try (GoogleCloudSearchCommitter subject =
+                                        new GoogleCloudSearchCommitter()) {
+                                XML xml = minimalXml(
+                                                secretFile.getAbsolutePath(),
+                                                server.baseUrl() + "/");
                                 subject.loadBatchCommitterFromXML(xml);
                                 subject.initBatchCommitter();
 
@@ -268,29 +315,69 @@ class GoogleCloudSearchCommitterTest {
                                                 "text/plain");
                                 metadata.set("title", "Raw title");
 
-                                List<ICommitterRequest> requests = new ArrayList<>();
+                                List<ICommitterRequest> requests =
+                                                new ArrayList<>();
                                 requests.add(new UpsertRequest(
                                                 REFERENCE,
                                                 metadata,
-                                                new ByteArrayInputStream("ignored".getBytes(UTF_8))));
+                                                new ByteArrayInputStream(
+                                                                "ignored".getBytes(
+                                                                                UTF_8))));
 
                                 subject.commitBatch(requests.iterator());
                         }
 
-                        server.verify(1, com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor(
-                                        com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo(
-                                                        "/oauth2/v4/token")));
-                        server.verify(1, com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor(
-                                        com.github.tomakehurst.wiremock.client.WireMock.urlMatching(
-                                                        "/v1/indexing/datasources/.*/items/.*:upload")));
-                        server.verify(1, com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor(
-                                        com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching(
-                                                        "/upload/v1/media/.*")));
-                        server.verify(1, com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor(
-                                        com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo("/batch")));
+                        server.verify(1, com.github.tomakehurst.wiremock.client.WireMock
+                                        .postRequestedFor(
+                                                        com.github.tomakehurst.wiremock.client.WireMock
+                                                                        .urlPathEqualTo(
+                                                                                        "/oauth2/v4/token")));
+                        server.verify(1, com.github.tomakehurst.wiremock.client.WireMock
+                                        .postRequestedFor(
+                                                        com.github.tomakehurst.wiremock.client.WireMock
+                                                                        .urlMatching(
+                                                                                        "/v1/indexing/datasources/.*/items/.*:upload")));
+                        server.verify(1, com.github.tomakehurst.wiremock.client.WireMock
+                                        .postRequestedFor(
+                                                        com.github.tomakehurst.wiremock.client.WireMock
+                                                                        .urlPathMatching(
+                                                                                        "/upload/v1/media/.*")));
+                        server.verify(1, com.github.tomakehurst.wiremock.client.WireMock
+                                        .postRequestedFor(
+                                                        com.github.tomakehurst.wiremock.client.WireMock
+                                                                        .urlPathEqualTo("/batch")));
                 } finally {
                         server.stop();
                 }
+        }
+
+        private String extractIndexVersion(String batchBody) {
+                return extract(batchBody, "\"version\":\"([^\"]+)\"",
+                                "Item.version");
+        }
+
+        private String extractDeleteVersion(String batchBody) {
+                return extract(batchBody,
+                                "(?im)^DELETE\\s+\\S*[?&]version=([^&\\s]+)",
+                                "delete version query parameter");
+        }
+
+        private String extract(String batchBody, String regex, String what) {
+                Matcher matcher = Pattern.compile(regex).matcher(batchBody);
+                assertThat(matcher.find())
+                                .as("%s present in batch body:%n%s", what,
+                                                batchBody)
+                                .isTrue();
+                return matcher.group(1);
+        }
+
+        private String decodeVersion(String encoded) {
+                // Fails the test if the value was sent unencoded: the raw
+                // version string contains a "-", which is not in the standard
+                // base64 alphabet, and url-safe decoding of it yields bytes
+                // that do not match VERSION_PATTERN.
+                return new String(Base64.getUrlDecoder().decode(encoded),
+                                UTF_8);
         }
 
         private XML minimalXml(String secretKeyPath, String apiEndpoint) {
@@ -303,14 +390,17 @@ class GoogleCloudSearchCommitterTest {
 
         private File createServiceAccountJson(String baseUrl)
                         throws IOException, GeneralSecurityException {
-                KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+                KeyPairGenerator generator =
+                                KeyPairGenerator.getInstance("RSA");
                 generator.initialize(2048);
                 KeyPair keyPair = generator.generateKeyPair();
 
                 String privateKey = "-----BEGIN PRIVATE KEY-----\n"
                                 + Base64.getMimeEncoder(64,
                                                 "\n".getBytes(StandardCharsets.US_ASCII))
-                                                .encodeToString(keyPair.getPrivate().getEncoded())
+                                                .encodeToString(keyPair
+                                                                .getPrivate()
+                                                                .getEncoded())
                                 + "\n-----END PRIVATE KEY-----\n";
 
                 String json = "{"
@@ -357,26 +447,30 @@ class GoogleCloudSearchCommitterTest {
                                 + "--batch_test--\r\n";
         }
 
-        private static final class TestHelper extends GoogleCloudSearchCommitter.Helper {
+        private static final class TestHelper
+                        extends GoogleCloudSearchCommitter.Helper {
                 private final HttpTransport transport;
                 private final long currentTimeMillis;
 
-                private TestHelper(HttpTransport transport, long currentTimeMillis) {
+                private TestHelper(HttpTransport transport,
+                                long currentTimeMillis) {
                         this.transport = transport;
                         this.currentTimeMillis = currentTimeMillis;
                 }
 
                 @Override
-                CloudSearch createCloudSearch(String applicationName, String secretKeyPath,
+                CloudSearch createCloudSearch(String applicationName,
+                                String secretKeyPath,
                                 String apiEndpoint,
                                 GoogleCloudSearchCommitter.HttpRequestOptions httpOptions) {
                         return new CloudSearch.Builder(
                                         transport,
                                         JSON_FACTORY,
                                         noOpInitializer())
-                                        .setApplicationName(applicationName)
-                                        .setRootUrl(apiEndpoint)
-                                        .build();
+                                                        .setApplicationName(
+                                                                        applicationName)
+                                                        .setRootUrl(apiEndpoint)
+                                                        .build();
                 }
 
                 @Override
@@ -391,10 +485,13 @@ class GoogleCloudSearchCommitterTest {
                 }
         }
 
-        private static final class RecordingTransport extends MockHttpTransport {
+        private static final class RecordingTransport
+                        extends MockHttpTransport {
                 private final List<String> urls = new ArrayList<>();
-                private final List<MockLowLevelHttpRequest> requests = new ArrayList<>();
-                private final Deque<MockLowLevelHttpResponse> responses = new ArrayDeque<>();
+                private final List<MockLowLevelHttpRequest> requests =
+                                new ArrayList<>();
+                private final Deque<MockLowLevelHttpResponse> responses =
+                                new ArrayDeque<>();
 
                 void enqueue(MockLowLevelHttpResponse response) {
                         responses.add(response);
@@ -409,15 +506,18 @@ class GoogleCloudSearchCommitterTest {
                 }
 
                 @Override
-                public LowLevelHttpRequest buildRequest(String method, String url)
+                public LowLevelHttpRequest buildRequest(String method,
+                                String url)
                                 throws IOException {
                         urls.add(url);
-                        MockLowLevelHttpRequest request = new MockLowLevelHttpRequest(url) {
-                                @Override
-                                public LowLevelHttpResponse execute() throws IOException {
-                                        return responses.removeFirst();
-                                }
-                        };
+                        MockLowLevelHttpRequest request =
+                                        new MockLowLevelHttpRequest(url) {
+                                                @Override
+                                                public LowLevelHttpResponse
+                                                                execute() throws IOException {
+                                                        return responses.removeFirst();
+                                                }
+                                        };
                         requests.add(request);
                         return request;
                 }

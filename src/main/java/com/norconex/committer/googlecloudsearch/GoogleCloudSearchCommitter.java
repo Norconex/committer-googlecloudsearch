@@ -218,28 +218,36 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     static final String CONFIG_CONNECTOR_NAME = "connectorName";
     static final String CONFIG_SOURCE_ID_FIELD = "sourceIdField";
     static final String CONFIG_KEEP_SOURCE_ID_FIELD = "keepSourceIdField";
-    static final String CONFIG_HTTP_CONNECT_TIMEOUT_MILLIS = "httpConnectTimeoutMillis";
-    static final String CONFIG_HTTP_READ_TIMEOUT_MILLIS = "httpReadTimeoutMillis";
+    static final String CONFIG_HTTP_CONNECT_TIMEOUT_MILLIS =
+            "httpConnectTimeoutMillis";
+    static final String CONFIG_HTTP_READ_TIMEOUT_MILLIS =
+            "httpReadTimeoutMillis";
     static final String CONFIG_HTTP_MAX_RETRIES = "httpMaxRetries";
-    static final String CONFIG_HTTP_BACKOFF_INITIAL_INTERVAL_MILLIS = "httpBackoffInitialIntervalMillis";
-    static final String CONFIG_HTTP_BACKOFF_MAX_INTERVAL_MILLIS = "httpBackoffMaxIntervalMillis";
-    static final String CONFIG_HTTP_BACKOFF_MAX_ELAPSED_TIME_MILLIS = "httpBackoffMaxElapsedTimeMillis";
+    static final String CONFIG_HTTP_BACKOFF_INITIAL_INTERVAL_MILLIS =
+            "httpBackoffInitialIntervalMillis";
+    static final String CONFIG_HTTP_BACKOFF_MAX_INTERVAL_MILLIS =
+            "httpBackoffMaxIntervalMillis";
+    static final String CONFIG_HTTP_BACKOFF_MAX_ELAPSED_TIME_MILLIS =
+            "httpBackoffMaxElapsedTimeMillis";
     static final String CONFIG_METADATA = "metadata";
     static final String CONFIG_STRUCTURED_DATA = "structuredData";
 
-    static final String DEFAULT_APPLICATION_NAME = "Norconex Google Cloud Search Committer";
+    static final String DEFAULT_APPLICATION_NAME =
+            "Norconex Google Cloud Search Committer";
     static final String DEFAULT_TITLE_SOURCE_FIELD = "title";
     static final String DEFAULT_OBJECT_TYPE_SOURCE_FIELD = "objectType";
     static final String DEFAULT_OBJECT_TYPE = "document";
     static final String DEFAULT_UPDATE_TIME_SOURCE_FIELD = "Last-Modified";
     static final String DEFAULT_TEXT_CONTENT_TYPE = "text/plain";
-    static final String DEFAULT_BINARY_CONTENT_TYPE = "application/octet-stream";
+    static final String DEFAULT_BINARY_CONTENT_TYPE =
+            "application/octet-stream";
     static final int INLINE_CONTENT_MAX_BYTES = 102400;
     // Google Cloud Search hard limit on the number of values a single
     // enum-typed structured data property may carry per item.
     static final int MAX_ENUM_VALUES = 32;
 
-    private static final String INDEXING_SCOPE = "https://www.googleapis.com/auth/cloud_search.indexing";
+    private static final String INDEXING_SCOPE =
+            "https://www.googleapis.com/auth/cloud_search.indexing";
     private static final String CONTENT_ITEM_TYPE = "CONTENT_ITEM";
 
     public enum UploadFormat {
@@ -395,7 +403,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     private final Helper helper;
     private final List<AclMapping> aclMappings = new ArrayList<>();
     private final List<MetadataMapping> metadataMappings = new ArrayList<>();
-    private final List<StructuredDataMapping> structuredDataMappings = new ArrayList<>();
+    private final List<StructuredDataMapping> structuredDataMappings =
+            new ArrayList<>();
     private final AtomicLong versionSequence = new AtomicLong();
 
     private String secretKeyPath;
@@ -448,7 +457,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         return applicationName;
     }
 
-    public GoogleCloudSearchCommitter setApplicationName(String applicationName) {
+    public GoogleCloudSearchCommitter
+            setApplicationName(String applicationName) {
         this.applicationName = applicationName;
         return this;
     }
@@ -475,7 +485,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         return keepSourceIdField;
     }
 
-    public GoogleCloudSearchCommitter setKeepSourceIdField(boolean keepSourceIdField) {
+    public GoogleCloudSearchCommitter
+            setKeepSourceIdField(boolean keepSourceIdField) {
         this.keepSourceIdField = keepSourceIdField;
         return this;
     }
@@ -510,7 +521,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         return uploadFormat;
     }
 
-    public GoogleCloudSearchCommitter setUploadFormat(UploadFormat uploadFormat) {
+    public GoogleCloudSearchCommitter
+            setUploadFormat(UploadFormat uploadFormat) {
         this.uploadFormat = uploadFormat;
         return this;
     }
@@ -559,7 +571,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
 
     public GoogleCloudSearchCommitter setHttpBackoffInitialIntervalMillis(
             int httpBackoffInitialIntervalMillis) {
-        this.httpBackoffInitialIntervalMillis = httpBackoffInitialIntervalMillis;
+        this.httpBackoffInitialIntervalMillis =
+                httpBackoffInitialIntervalMillis;
         return this;
     }
 
@@ -587,7 +600,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         return Collections.unmodifiableList(aclMappings);
     }
 
-    public GoogleCloudSearchCommitter setAclMappings(List<AclMapping> aclMappings) {
+    public GoogleCloudSearchCommitter
+            setAclMappings(List<AclMapping> aclMappings) {
         this.aclMappings.clear();
         if (aclMappings != null) {
             this.aclMappings.addAll(aclMappings);
@@ -688,12 +702,13 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         Item item = new Item()
                 .setName(itemName)
                 .setItemType(CONTENT_ITEM_TYPE)
-                .encodeVersion(nextVersion().getBytes(UTF_8))
+                .setVersion(encodeVersion(nextVersion()))
                 .setMetadata(buildMetadata(request, contentType))
                 .setStructuredData(buildStructuredData(request.getMetadata()))
                 .setAcl(buildAcl(request.getMetadata()));
 
-        ItemContent itemContent = buildItemContent(request, itemName, contentType);
+        ItemContent itemContent =
+                buildItemContent(request, itemName, contentType);
         if (itemContent != null) {
             item.setContent(itemContent);
         }
@@ -720,6 +735,11 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
                 .datasources()
                 .items()
                 .delete(itemName)
+                // Like Item#version, the delete "version" is a bytes field and
+                // must be base64-encoded on the wire. Cloud Search compares the
+                // decoded bytes of both lexically, so the encoding here has to
+                // match the one used by queueUpsert (Item#encodeVersion).
+                .setVersion(encodeVersion(nextVersion()))
                 .setMode(requestMode.name())
                 .queue(batch, failures);
     }
@@ -761,8 +781,9 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
             itemMetadata.setContentLanguage(contentLanguage);
         }
 
-        String updateTime = resolveMetadataValue(metadata, MetadataField.UPDATE_TIME,
-                request.getReference(), contentType);
+        String updateTime =
+                resolveMetadataValue(metadata, MetadataField.UPDATE_TIME,
+                        request.getReference(), contentType);
         if (StringUtils.isNotBlank(updateTime)) {
             String parsedTime = toRfc3339(updateTime);
             if (parsedTime != null) {
@@ -770,8 +791,9 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
             }
         }
 
-        String createTime = resolveMetadataValue(metadata, MetadataField.CREATE_TIME,
-                request.getReference(), contentType);
+        String createTime =
+                resolveMetadataValue(metadata, MetadataField.CREATE_TIME,
+                        request.getReference(), contentType);
         if (StringUtils.isNotBlank(createTime)) {
             String parsedTime = toRfc3339(createTime);
             if (parsedTime != null) {
@@ -907,7 +929,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
 
         switch (type) {
             case DATE:
-                List<com.google.api.services.cloudsearch.v1.model.Date> dates = parseAllDates(values);
+                List<com.google.api.services.cloudsearch.v1.model.Date> dates =
+                        parseAllDates(values);
                 if (dates != null) {
                     return property.setDateValues(
                             new DateValues().setValues(dates));
@@ -959,7 +982,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
                 // text rather than fail the whole batch.
                 if (values.size() <= MAX_ENUM_VALUES) {
                     return property.setEnumValues(
-                            new EnumValues().setValues(new ArrayList<>(values)));
+                            new EnumValues()
+                                    .setValues(new ArrayList<>(values)));
                 }
                 log.warn("Field '{}' is mapped as structured data type "
                         + "'enum' but has {} values, exceeding Google Cloud "
@@ -1023,10 +1047,13 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         return doubles;
     }
 
-    private List<com.google.api.services.cloudsearch.v1.model.Date> parseAllDates(List<String> values) {
-        List<com.google.api.services.cloudsearch.v1.model.Date> dates = new ArrayList<>(values.size());
+    private List<com.google.api.services.cloudsearch.v1.model.Date>
+            parseAllDates(List<String> values) {
+        List<com.google.api.services.cloudsearch.v1.model.Date> dates =
+                new ArrayList<>(values.size());
         for (String value : values) {
-            com.google.api.services.cloudsearch.v1.model.Date date = toDateValue(value);
+            com.google.api.services.cloudsearch.v1.model.Date date =
+                    toDateValue(value);
             if (date == null) {
                 return null;
             }
@@ -1113,7 +1140,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
                 continue;
             }
             for (String value : values) {
-                Principal principal = toPrincipal(mapping.getPrincipalType(), value);
+                Principal principal =
+                        toPrincipal(mapping.getPrincipalType(), value);
                 if (principal == null) {
                     continue;
                 }
@@ -1135,7 +1163,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
             }
         }
 
-        String parentValue = metadataValue(metadata, aclInheritance.getFromField());
+        String parentValue =
+                metadataValue(metadata, aclInheritance.getFromField());
         boolean hasInheritance = StringUtils.isNotBlank(parentValue);
 
         ItemAcl acl = new ItemAcl();
@@ -1280,7 +1309,26 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     private String nextVersion() {
         long millis = helper.currentTimeMillis();
         long sequence = versionSequence.incrementAndGet();
-        return String.format("%019d-%06d", millis, sequence);
+        // Both parts are zero-padded to a fixed width so versions keep sorting
+        // correctly as raw bytes, which is how Cloud Search compares them. The
+        // sequence is only a tie-breaker within a same-millisecond burst, but
+        // it is padded wide enough that it never grows a digit and inverts the
+        // ordering on crawls of more than a million documents.
+        return String.format("%019d-%012d", millis, sequence);
+    }
+
+    /**
+     * Encodes a version string the way Cloud Search expects it on the wire.
+     * Both {@code Item.version} and the delete request's {@code version} query
+     * parameter are bytes fields, so they must carry base64 rather than the
+     * raw string. URL-safe base64 is used because the value also travels as a
+     * query parameter on deletes.
+     * @param version raw version string
+     * @return base64-encoded version
+     */
+    private String encodeVersion(String version) {
+        return Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(version.getBytes(UTF_8));
     }
 
     private String toRfc3339(String value) {
@@ -1534,7 +1582,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
                     httpOptions);
             CloudSearch.Builder builder = new CloudSearch.Builder(
                     createHttpTransport(), createJsonFactory(), initializer)
-                    .setApplicationName(applicationName);
+                            .setApplicationName(applicationName);
             if (StringUtils.isNotBlank(apiEndpoint)) {
                 builder.setRootUrl(ensureTrailingSlash(apiEndpoint));
             }
@@ -1558,7 +1606,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
                 GoogleCredentials credentials = ServiceAccountCredentials
                         .fromStream(input)
                         .createScoped(Collections.singleton(INDEXING_SCOPE));
-                HttpRequestInitializer authInitializer = new HttpCredentialsAdapter(credentials);
+                HttpRequestInitializer authInitializer =
+                        new HttpCredentialsAdapter(credentials);
                 HttpRequestOptions options = httpOptions != null
                         ? httpOptions
                         : new HttpRequestOptions();
@@ -1645,7 +1694,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
                 return;
             }
 
-            ExponentialBackOff.Builder builder = new ExponentialBackOff.Builder();
+            ExponentialBackOff.Builder builder =
+                    new ExponentialBackOff.Builder();
             if (backoffInitialIntervalMillis >= 0) {
                 builder.setInitialIntervalMillis(backoffInitialIntervalMillis);
             }
@@ -1662,8 +1712,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
             request.setUnsuccessfulResponseHandler(
                     new HttpBackOffUnsuccessfulResponseHandler(
                             builder.build())
-                            .setBackOffRequired(
-                                    HttpBackOffUnsuccessfulResponseHandler.BackOffRequired.ON_SERVER_ERROR));
+                                    .setBackOffRequired(
+                                            HttpBackOffUnsuccessfulResponseHandler.BackOffRequired.ON_SERVER_ERROR));
         }
     }
 
