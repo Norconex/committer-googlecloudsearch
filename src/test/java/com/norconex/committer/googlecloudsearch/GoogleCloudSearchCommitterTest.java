@@ -17,6 +17,8 @@ package com.norconex.committer.googlecloudsearch;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -30,6 +32,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Deque;
+import java.util.Iterator;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -49,6 +52,7 @@ import com.google.api.client.testing.http.MockHttpTransport;
 import com.google.api.client.testing.http.MockLowLevelHttpRequest;
 import com.google.api.client.testing.http.MockLowLevelHttpResponse;
 import com.google.api.services.cloudsearch.v1.CloudSearch;
+import com.norconex.committer.core3.CommitterException;
 import com.norconex.committer.core3.DeleteRequest;
 import com.norconex.committer.core3.ICommitterRequest;
 import com.norconex.committer.core3.UpsertRequest;
@@ -196,6 +200,121 @@ class GoogleCloudSearchCommitterTest {
                         assertThat(decodeVersion(
                                         extractDeleteVersion(batchBody)))
                                                         .matches(VERSION_PATTERN);
+                }
+        }
+
+        @Test
+        void deleteOfMissingItemIsToleratedByDefault() throws Exception {
+                // Crawlers routinely delete references that were never
+                // indexed (rejected, orphan or unmodified documents). Cloud
+                // Search answers those with a 404, which must not fail the
+                // batch -- nor the upserts travelling with it.
+                RecordingTransport transport = new RecordingTransport();
+                transport.enqueue(jsonResponse(
+                                successfulBatchResponseHeader(),
+                                batchResponseBody(200, 404)));
+
+                try (GoogleCloudSearchCommitter subject = newSubject(
+                                transport, null)) {
+                        List<ICommitterRequest> requests = new ArrayList<>();
+                        requests.add(new UpsertRequest(
+                                        REFERENCE, new Properties(),
+                                        new ByteArrayInputStream(
+                                                        CONTENT.getBytes(
+                                                                        UTF_8))));
+                        requests.add(new DeleteRequest(
+                                        REFERENCE + "/gone",
+                                        new Properties()));
+
+                        Iterator<ICommitterRequest> it = requests.iterator();
+                        assertThatNoException().isThrownBy(
+                                        () -> subject.commitBatch(it));
+                }
+        }
+
+        @Test
+        void deleteOfMissingItemFailsWhenConfiguredToFail() throws Exception {
+                RecordingTransport transport = new RecordingTransport();
+                transport.enqueue(jsonResponse(
+                                successfulBatchResponseHeader(),
+                                batchResponseBody(404)));
+
+                try (GoogleCloudSearchCommitter subject = newSubject(
+                                transport, Boolean.TRUE)) {
+                        List<ICommitterRequest> requests = new ArrayList<>();
+                        requests.add(new DeleteRequest(
+                                        REFERENCE + "/gone",
+                                        new Properties()));
+
+                        Iterator<ICommitterRequest> it = requests.iterator();
+                        assertThatThrownBy(() -> subject.commitBatch(it))
+                                        .isInstanceOf(CommitterException.class)
+                                        .hasMessageContaining("batch failure")
+                                        // the failing document must be named
+                                        .hasMessageContaining(
+                                                        REFERENCE + "/gone")
+                                        .hasMessageContaining("delete");
+                }
+        }
+
+        @Test
+        void indexNotFoundAlwaysFailsEvenWhenDeletesAreTolerated()
+                        throws Exception {
+                // A 404 on an index request means a bad data source or
+                // connector name -- tolerating delete 404s must never mask it.
+                RecordingTransport transport = new RecordingTransport();
+                transport.enqueue(jsonResponse(
+                                successfulBatchResponseHeader(),
+                                batchResponseBody(404)));
+
+                try (GoogleCloudSearchCommitter subject = newSubject(
+                                transport, null)) {
+                        List<ICommitterRequest> requests = new ArrayList<>();
+                        requests.add(new UpsertRequest(
+                                        REFERENCE, new Properties(),
+                                        new ByteArrayInputStream(
+                                                        CONTENT.getBytes(
+                                                                        UTF_8))));
+
+                        Iterator<ICommitterRequest> it = requests.iterator();
+                        assertThatThrownBy(() -> subject.commitBatch(it))
+                                        .isInstanceOf(CommitterException.class)
+                                        .hasMessageContaining(REFERENCE)
+                                        .hasMessageContaining("index");
+                }
+        }
+
+        @Test
+        void batchFailuresAreAttributedToTheirOwnDocument() throws Exception {
+                // Failure deliberately in the middle: an ordering mistake
+                // would attribute it to the wrong document.
+                RecordingTransport transport = new RecordingTransport();
+                transport.enqueue(jsonResponse(
+                                successfulBatchResponseHeader(),
+                                batchResponseBody(200, 404, 200)));
+
+                try (GoogleCloudSearchCommitter subject = newSubject(
+                                transport, null)) {
+                        List<ICommitterRequest> requests = new ArrayList<>();
+                        for (String name : List.of(
+                                        "first", "second", "third")) {
+                                requests.add(new UpsertRequest(
+                                                "https://example.com/" + name,
+                                                new Properties(),
+                                                new ByteArrayInputStream(
+                                                                CONTENT.getBytes(
+                                                                                UTF_8))));
+                        }
+
+                        Iterator<ICommitterRequest> it = requests.iterator();
+                        assertThatThrownBy(() -> subject.commitBatch(it))
+                                        .isInstanceOf(CommitterException.class)
+                                        .hasMessageContaining(
+                                                        "https://example.com/second")
+                                        .hasMessageNotContaining(
+                                                        "https://example.com/first")
+                                        .hasMessageNotContaining(
+                                                        "https://example.com/third");
                 }
         }
 
@@ -349,6 +468,66 @@ class GoogleCloudSearchCommitterTest {
                 } finally {
                         server.stop();
                 }
+        }
+
+        /**
+         * Builds a committer wired to the given transport, using the "text"
+         * upload format so upserts stay inline (a "raw" upload would need
+         * extra HTTP round trips before the batch).
+         */
+        private GoogleCloudSearchCommitter newSubject(
+                        RecordingTransport transport,
+                        Boolean failOnDeleteNotFound) throws Exception {
+                GoogleCloudSearchCommitter subject =
+                                new GoogleCloudSearchCommitter(
+                                                new TestHelper(transport,
+                                                                1000L));
+                XML xml = minimalXml(
+                                new File(tempDir, "placeholder.json")
+                                                .getAbsolutePath(),
+                                "https://mock.local/");
+                xml.addElement("uploadFormat", "text");
+                if (failOnDeleteNotFound != null) {
+                        xml.addElement("failOnDeleteNotFound",
+                                        failOnDeleteNotFound);
+                }
+                subject.loadBatchCommitterFromXML(xml);
+                subject.initBatchCommitter();
+                return subject;
+        }
+
+        /**
+         * Builds a batch response where each supplied status decides whether
+         * the matching sub-request succeeded or failed with that HTTP code.
+         */
+        private String batchResponseBody(int... statuses) {
+                StringBuilder b = new StringBuilder();
+                for (int i = 0; i < statuses.length; i++) {
+                        int status = statuses[i];
+                        b.append("--batch_test\r\n")
+                                        .append("Content-Type: application/http\r\n")
+                                        .append("Content-ID: response-")
+                                        .append(i + 1).append("\r\n\r\n");
+                        if (status == 200) {
+                                b.append("HTTP/1.1 200 OK\r\n")
+                                                .append("Content-Type: application/json; "
+                                                                + "charset=UTF-8\r\n\r\n")
+                                                .append("{\"name\":\"operations/op-")
+                                                .append(i + 1)
+                                                .append("\",\"done\":true}\r\n");
+                        } else {
+                                b.append("HTTP/1.1 ").append(status)
+                                                .append(" Error\r\n")
+                                                .append("Content-Type: application/json; "
+                                                                + "charset=UTF-8\r\n\r\n")
+                                                .append("{\"error\":{\"code\":")
+                                                .append(status)
+                                                .append(",\"message\":\"Requested entity "
+                                                                + "was not found.\","
+                                                                + "\"status\":\"NOT_FOUND\"}}\r\n");
+                        }
+                }
+                return b.append("--batch_test--\r\n").toString();
         }
 
         private String extractIndexVersion(String batchBody) {

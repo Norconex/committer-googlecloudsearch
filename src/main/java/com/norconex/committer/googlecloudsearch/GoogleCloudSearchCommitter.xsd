@@ -24,6 +24,8 @@
               minOccurs="0" maxOccurs="1" />
             <xs:element name="keepSourceIdField" type="xs:boolean"
               minOccurs="0" maxOccurs="1" />
+            <xs:element name="failOnDeleteNotFound" type="xs:boolean"
+              minOccurs="0" maxOccurs="1" />
             <xs:element name="httpConnectTimeoutMillis" type="xs:int"
               minOccurs="0" maxOccurs="1" />
             <xs:element name="httpReadTimeoutMillis" type="xs:int"

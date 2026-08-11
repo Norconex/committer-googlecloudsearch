@@ -92,6 +92,7 @@ import com.norconex.committer.core3.DeleteRequest;
 import com.norconex.committer.core3.ICommitterRequest;
 import com.norconex.committer.core3.UpsertRequest;
 import com.norconex.committer.core3.batch.AbstractBatchCommitter;
+import com.norconex.commons.lang.ExceptionUtil;
 import com.norconex.commons.lang.map.Properties;
 import com.norconex.commons.lang.xml.XML;
 
@@ -136,6 +137,7 @@ import com.norconex.commons.lang.xml.XML;
  * <requestMode>asynchronous</requestMode>
  * <sourceIdField>document.reference</sourceIdField>
  * <keepSourceIdField>false</keepSourceIdField>
+ * <failOnDeleteNotFound>false</failOnDeleteNotFound>
  * <apiEndpoint>http://localhost:8080/</apiEndpoint>
  * <httpConnectTimeoutMillis>30000</httpConnectTimeoutMillis>
  * <httpReadTimeoutMillis>120000</httpReadTimeoutMillis>
@@ -218,6 +220,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     static final String CONFIG_CONNECTOR_NAME = "connectorName";
     static final String CONFIG_SOURCE_ID_FIELD = "sourceIdField";
     static final String CONFIG_KEEP_SOURCE_ID_FIELD = "keepSourceIdField";
+    static final String CONFIG_FAIL_ON_DELETE_NOT_FOUND =
+            "failOnDeleteNotFound";
     static final String CONFIG_HTTP_CONNECT_TIMEOUT_MILLIS =
             "httpConnectTimeoutMillis";
     static final String CONFIG_HTTP_READ_TIMEOUT_MILLIS =
@@ -414,6 +418,7 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     private String connectorName = DEFAULT_APPLICATION_NAME;
     private String sourceIdField;
     private boolean keepSourceIdField;
+    private boolean failOnDeleteNotFound;
     private UploadFormat uploadFormat = UploadFormat.RAW;
     private RequestMode requestMode = RequestMode.ASYNCHRONOUS;
     private AclInheritanceMapping aclInheritance = new AclInheritanceMapping();
@@ -488,6 +493,34 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
     public GoogleCloudSearchCommitter
             setKeepSourceIdField(boolean keepSourceIdField) {
         this.keepSourceIdField = keepSourceIdField;
+        return this;
+    }
+
+    /**
+     * Whether a delete request targeting an item that does not exist in the
+     * index is treated as a failure. Crawlers routinely delete references
+     * that were never indexed (rejected, orphan or unmodified documents), and
+     * Google Cloud Search answers those with a "404 NOT_FOUND". Since the
+     * desired outcome (the item is absent) already holds, such responses are
+     * ignored by default. Set to <code>true</code> to have them fail the
+     * batch instead. Only delete requests are affected: a "404" on an index
+     * request always fails, since it signals a bad data source or connector
+     * name.
+     * @return <code>true</code> if missing items fail a delete
+     */
+    public boolean isFailOnDeleteNotFound() {
+        return failOnDeleteNotFound;
+    }
+
+    /**
+     * Sets whether a delete request targeting a non-existing item is treated
+     * as a failure.
+     * @param failOnDeleteNotFound <code>true</code> to fail on missing items
+     * @return this instance
+     */
+    public GoogleCloudSearchCommitter
+            setFailOnDeleteNotFound(boolean failOnDeleteNotFound) {
+        this.failOnDeleteNotFound = failOnDeleteNotFound;
         return this;
     }
 
@@ -686,8 +719,14 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         } catch (CommitterException e) {
             throw e;
         } catch (Exception e) {
+            // Spell out the cause chain: the CommitterException is reported
+            // through a CommitterEvent whose toString only carries this
+            // message, so a setup that suppresses stack traces would
+            // otherwise leave nothing to diagnose.
             throw new CommitterException(
-                    "Could not commit batch to Google Cloud Search.", e);
+                    "Could not commit batch to Google Cloud Search:\n"
+                            + ExceptionUtil.getFormattedMessages(e),
+                    e);
         }
     }
 
@@ -722,7 +761,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
                 .datasources()
                 .items()
                 .index(itemName, indexRequest)
-                .queue(batch, failures);
+                .queue(batch, failures.callbackFor(
+                        "index", request.getReference(), false));
     }
 
     private void queueDelete(BatchRequest batch, DeleteRequest request,
@@ -741,7 +781,9 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
                 // match the one used by queueUpsert (Item#encodeVersion).
                 .setVersion(encodeVersion(nextVersion()))
                 .setMode(requestMode.name())
-                .queue(batch, failures);
+                .queue(batch, failures.callbackFor(
+                        "delete", request.getReference(),
+                        !failOnDeleteNotFound));
     }
 
     private ItemMetadata buildMetadata(UpsertRequest request,
@@ -1430,6 +1472,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         sourceIdField = xml.getString(CONFIG_SOURCE_ID_FIELD, sourceIdField);
         keepSourceIdField = xml.getBoolean(
                 CONFIG_KEEP_SOURCE_ID_FIELD, keepSourceIdField);
+        failOnDeleteNotFound = xml.getBoolean(
+                CONFIG_FAIL_ON_DELETE_NOT_FOUND, failOnDeleteNotFound);
         httpConnectTimeoutMillis = xml.getInteger(
                 CONFIG_HTTP_CONNECT_TIMEOUT_MILLIS,
                 httpConnectTimeoutMillis);
@@ -1507,6 +1551,8 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         xml.addElement(CONFIG_CONNECTOR_NAME, connectorName);
         xml.addElement(CONFIG_SOURCE_ID_FIELD, sourceIdField);
         xml.addElement(CONFIG_KEEP_SOURCE_ID_FIELD, keepSourceIdField);
+        xml.addElement(
+                CONFIG_FAIL_ON_DELETE_NOT_FOUND, failOnDeleteNotFound);
         xml.addElement(
                 CONFIG_HTTP_CONNECT_TIMEOUT_MILLIS,
                 httpConnectTimeoutMillis);
@@ -1896,29 +1942,62 @@ public class GoogleCloudSearchCommitter extends AbstractBatchCommitter {
         }
     }
 
-    private static final class BatchFailureCollector
-            extends JsonBatchCallback<Operation> {
+    /**
+     * Accumulates the failures reported by a batch. Google invokes the
+     * callback registered with each queued request, so every outcome can be
+     * attributed to the document that produced it instead of being reported
+     * as an anonymous error.
+     */
+    static final class BatchFailureCollector {
+        private static final int NOT_FOUND = 404;
+
         private final List<String> failures = new ArrayList<>();
 
-        @Override
-        public void onSuccess(Operation operation,
-                HttpHeaders responseHeaders) {
-            // NOOP
+        /**
+         * Creates the callback for a single queued operation.
+         * @param operation operation name, for reporting
+         * @param reference document reference the operation applies to
+         * @param tolerateNotFound whether a "404" is an acceptable outcome
+         * @return callback to register with the batch request
+         */
+        JsonBatchCallback<Operation> callbackFor(String operation,
+                String reference, boolean tolerateNotFound) {
+            return new JsonBatchCallback<Operation>() {
+                @Override
+                public void onSuccess(Operation op, HttpHeaders headers) {
+                    // NOOP
+                }
+
+                @Override
+                public void onFailure(GoogleJsonError e, HttpHeaders headers) {
+                    if (tolerateNotFound && e.getCode() == NOT_FOUND) {
+                        log.debug("Ignoring \"not found\" response for {} of "
+                                + "\"{}\": the item is already absent from "
+                                + "the index.", operation, reference);
+                        return;
+                    }
+                    String detail = describe(e);
+                    log.error("Google Cloud Search rejected the {} of "
+                            + "\"{}\": {}", operation, reference, detail);
+                    failures.add(String.format(
+                            "%s of \"%s\": %s", operation, reference, detail));
+                }
+            };
         }
 
-        @Override
-        public void onFailure(GoogleJsonError e, HttpHeaders responseHeaders) {
+        private static String describe(GoogleJsonError e) {
             try {
-                failures.add(e.toPrettyString());
+                return e.toPrettyString();
             } catch (IOException ioe) {
-                failures.add(String.valueOf(e));
+                return String.valueOf(e);
             }
         }
 
         void throwIfAny() throws CommitterException {
             if (!failures.isEmpty()) {
                 throw new CommitterException(
-                        "Google Cloud Search returned batch failures: "
+                        "Google Cloud Search returned " + failures.size()
+                                + " batch failure(s):\n"
                                 + StringUtils.join(failures, "\n"));
             }
         }
